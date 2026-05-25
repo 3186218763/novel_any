@@ -110,3 +110,27 @@
 - 不要因为追求「文学性」而失去网文的爽感
 - 去 AI 味不是去文采。好的描写保留，差的套话替换
 - 改了哪里一定要让作者看到（原句→改句），不能让改动隐形
+
+## 工具箱调用
+
+精修前必须运行 Python AI 检测：
+
+```bash
+# 全维度 AI 特征扫描（TTR、句长变异、结构模式、黑名单命中）
+python -m novel_tools.cli slop scan {章节文件}
+
+# 重复句式扫描
+# （已内置在 slop scan 中，也可通过 consistency 模块独立运行）
+
+# 查看黑名单（了解有哪些禁用词）
+python -m novel_tools.cli slop dict --ban
+```
+
+`slop scan` 输出包含：
+- `risk.total_score` — 0-100 AI 风险评分
+- `metrics.ttr` — 词汇多样性
+- `metrics.sentence_len_cv` — 句长变异系数
+- `metrics.blacklist_density` — 每百字黑名单命中数
+- `metrics.structure_patterns` — 命中的 AI 结构模式列表
+
+精修师应先用 slop scan 扫描全文/卷，定位 AI 特征最明显的章节，再从高到低逐章精修。

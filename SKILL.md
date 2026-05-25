@@ -44,7 +44,13 @@ version: 1.0.0
    - 不存在 → 进入新建流程
 2. **时间检查**：如上次写作距今超过 7 天，提示「要不要先回顾一下前面？」
 3. **追踪完整性**：如有项目，检查 `追踪/` 下文件是否完整，缺失则自动重建
-4. **伏笔预警**：检查伏笔账本中是否有即将到期未回收的条目，提醒作者
+4. **伏笔预警**：检查伏笔账本中是否有即将到期未回收的条目，提醒作者。
+
+   **自动执行：**
+   ```bash
+   python -m novel_tools.cli bible foreshadow warn --threshold 10 --project-dir {项目目录}
+   ```
+   如果当前项目有 .novel_tools.db 且存在超期伏笔，自动提醒。
 
 ---
 
@@ -176,6 +182,24 @@ delegate_task(
 | 传统文学 | `templates/project-trad/` | 主题线索、人物弧线全景、伏笔账本（与网文共有追踪模块） |
 
 复制模板到用户项目目录后，自动填充 `{书名}` `{日期}` 占位符。
+
+---
+
+## Python 工具箱（规划中）
+
+> 详见 `references/research-existing-tools.md` — 业界 5 个小说写作工具调研。
+
+计划为每个 Agent 配备对应的 Python 计算模块，不依赖 LLM 做确定性统计：
+
+| 模块 | 对应 Agent | 功能 |
+|------|-----------|------|
+| stats | architect + narrator | 字数/章节进度/对话描写比例/节奏密度 |
+| slop | polisher | AI 味检测：TTR/句长变异/黑名单(332词条)/结构模式 |
+| bible | character + consistency | 角色/世界观/伏笔 SQLite CRUD，含 speech_style 追踪 |
+| consistency | consistency-checker | 正则扫描：人名一致性、时间线、硬规则违反 |
+| outline | architect | 分层大纲校验：章纲 vs 正文覆盖度、checkpoint 完成率 |
+
+参考项目：novel-writer-master（已克隆分析其 anti_slop/bible/consistency/outline 模块）。
 
 ---
 

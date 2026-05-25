@@ -112,3 +112,30 @@
 
 - 网文模式：爽点密度、钩子策略、升级节奏（参照 genre-web.md）
 - 传统文学模式：人物弧线、主题深度、意象连贯（参照 genre-trad.md）
+
+## 工具箱调用
+
+大纲和角色管理使用 Python 工具：
+
+```bash
+# 解析章纲为结构化数据
+python -m novel_tools.cli outline parse {章纲文件}
+
+# 检查正文 vs 章纲覆盖差异
+python -m novel_tools.cli outline diff {正文章节} {章纲文件}
+
+# 角色管理
+python -m novel_tools.cli bible char list --project-dir {项目目录}
+python -m novel_tools.cli bible char add {角色名} --role protagonist
+
+# 世界观规则
+python -m novel_tools.cli bible world list --project-dir {项目目录}
+python -m novel_tools.cli bible world add {规则名} {内容} --category 力量体系 --hard
+
+# 伏笔管理
+python -m novel_tools.cli bible foreshadow plant {描述} --ch {章号}
+python -m novel_tools.cli bible foreshadow list
+python -m novel_tools.cli bible foreshadow warn --threshold 10
+```
+
+设计大纲阶段，architect 应主动将章纲和角色信息存入 Bible 数据库（`--project-dir` 指向用户小说项目目录），后续各 Agent 可共享这些结构化数据。

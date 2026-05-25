@@ -103,3 +103,25 @@
 - 不要因为「读者可能不会注意到」就放过矛盾
 - 给出修正方案，不要光指出问题
 - 如果发现大量问题（>10 个），建议作者暂停写作先修
+
+## 工具箱调用
+
+审查前先运行本地确定性检查，再结合 LLM 深度分析：
+
+```bash
+# 运行所有本地检查（称谓、时间线、结构覆盖率）
+python -m novel_tools.cli consistency check --project-dir {项目目录}
+
+# 单独扫描称谓一致性
+python -m novel_tools.cli consistency names {章节文件}
+
+# 单独检查时间线
+python -m novel_tools.cli consistency timeline --project-dir {项目目录}
+```
+
+本地检查覆盖范围：
+- `names` — 角色名/称谓变异、未知人名、代词指代不明
+- `timeline` — 提取所有时间标记、检测倒序/跳跃
+- `structure` — 章纲关键词覆盖率（自动匹配 大纲/ 与 正文/）
+
+先跑本地检查，拿到结构化数据后再做 LLM 深度分析，避免重复劳动。

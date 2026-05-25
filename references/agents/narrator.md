@@ -98,3 +98,23 @@
 - context-brief.md 每章更新一次
 - 保持「最近 5 章摘要」滚动
 - 不要因为「这一章没什么大事」就跳过追踪更新
+
+## 工具箱调用
+
+写作前/后可使用 `python -m novel_tools.cli` 获取数据支持：
+
+```bash
+# 写完一章后统计字数
+python -m novel_tools.cli stats count 正文/第N章_xxx.md
+
+# 分析本章节奏（对话/描写/叙述比例）
+python -m novel_tools.cli stats pacing 正文/第N章_xxx.md
+
+# 提取本章情绪曲线
+python -m novel_tools.cli stats rhythm 正文/第N章_xxx.md
+
+# 全书统计
+python -m novel_tools.cli stats count --dir {项目目录}
+```
+
+所有命令输出 JSON，Agent 应解析后向作者呈现关键数据（字数、对话占比、节奏密度、情绪峰值位置）。不要给作者看原始 JSON。
