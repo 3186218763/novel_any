@@ -50,30 +50,41 @@ def list_all(project_dir: str) -> list[dict]:
     return rows_to_list(rows)
 
 
-def warn_expiring(project_dir: str, threshold_ch: int = 5) -> list[dict]:
+def warn_expiring(project_dir: str, threshold_ch: int = 5,
+                  current_chapter: int | None = None) -> list[dict]:
     """预警：距埋入已超过 threshold 章仍未回收的伏笔.
 
     Args:
         threshold_ch: 超过此章数未回收则预警
+        current_chapter: 当前写作进度（章节号），若不提供则从 characters 表推算
     """
     db = get_db(project_dir)
     rows = db.execute(
         "SELECT * FROM foreshadows WHERE status='pending' ORDER BY planted_ch"
     ).fetchall()
-    db.close()
 
-    # 找到当前最大已写章节号
-    max_ch = 0
-    for r in rows:
-        planted = r["planted_ch"]
-        if planted > max_ch:
-            max_ch = planted
+    # 确定当前章节号：优先用传入参数，否则从 characters 表推算
+    if current_chapter is None:
+        try:
+            max_ch_row = db.execute(
+                "SELECT MAX(last_appear_ch) as max_ch FROM characters"
+            ).fetchone()
+            current_chapter = max_ch_row["max_ch"] if max_ch_row and max_ch_row["max_ch"] else 0
+        except Exception:
+            current_chapter = 0
+        # 如果 characters 表也没有数据，回退到伏笔表中最大 planted_ch
+        if current_chapter == 0:
+            for r in rows:
+                planted = r["planted_ch"]
+                if planted > current_chapter:
+                    current_chapter = planted
+    db.close()
 
     # 检查哪些伏笔超过了阈值章数
     warnings = []
     for r in rows:
         ch = r["planted_ch"]
-        age = max_ch - ch
+        age = current_chapter - ch
         if age >= threshold_ch:
             d = dict(r)
             d["age_chapters"] = age

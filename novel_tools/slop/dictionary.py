@@ -83,8 +83,17 @@ def load_dictionary(path: str | None = None) -> SlopDictionary:
             _dictionary = SlopDictionary(words=[])
             return _dictionary
 
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        logger.warning(f"Dictionary file not found: {path}, using empty dictionary")
+        _dictionary = SlopDictionary(words=[])
+        return _dictionary
+    except json.JSONDecodeError as e:
+        logger.warning(f"Invalid JSON in dictionary file {path}: {e}, using empty dictionary")
+        _dictionary = SlopDictionary(words=[])
+        return _dictionary
 
     words = [
         SlopWord(

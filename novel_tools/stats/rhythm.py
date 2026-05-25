@@ -59,8 +59,11 @@ def extract_emotion_curve(filepath: str, segments: int = 40) -> dict:
     if not path.exists():
         return {"error": f"File not found: {filepath}"}
 
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except (UnicodeDecodeError, PermissionError, IOError) as e:
+        return {"error": str(e)}
 
     # 移除 frontmatter
     text = re.sub(r'^---.*?---\n', '', text, flags=re.DOTALL)

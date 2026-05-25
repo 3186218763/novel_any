@@ -37,15 +37,32 @@ def scan_repetition(text: str) -> dict:
 
     repeated_para = [(p, c) for p, c in para_starts.most_common(15) if c >= 2]
 
-    # 3. 3-5 字短语重复（滑动窗口，采样）
+    # 3. 3-5 字短语重复（滑动窗口，采样上限防内存爆炸）
     words = list(re.findall(r'[\u4e00-\u9fff]+', text))
-    phrases = Counter()
+    # 限制分析的文本量：最多取前 20000 个中文字符的连续片段
+    MAX_TEXT_LEN = 20000
+    char_count = 0
+    limited_words = []
     for w in words:
+        limited_words.append(w)
+        char_count += len(w)
+        if char_count >= MAX_TEXT_LEN:
+            break
+    # 限制短语总数上限
+    MAX_PHRASES = 5000
+    phrases = Counter()
+    for w in limited_words:
         if len(w) >= 3:
             for n in range(3, min(6, len(w) + 1)):
                 for i in range(len(w) - n + 1):
                     phrase = w[i:i + n]
                     phrases[phrase] += 1
+                    if len(phrases) >= MAX_PHRASES:
+                        break
+                if len(phrases) >= MAX_PHRASES:
+                    break
+        if len(phrases) >= MAX_PHRASES:
+            break
 
     repeated_phrases = [(p, c) for p, c in phrases.most_common(30) if c >= 3]
 

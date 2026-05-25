@@ -8,7 +8,7 @@ import sys
 def cmd_stats(args):
     from novel_tools.stats import wordcount, pacing, rhythm
     if args.stats_cmd == "count":
-        if hasattr(args, 'path'):
+        if args.path is not None:
             result = wordcount.count_chapter(args.path)
         else:
             result = wordcount.count_book(args.dir)
@@ -69,7 +69,9 @@ def cmd_bible(args):
             foreshadow.resolve(project_dir, args.id, args.ch)
             result = {"ok": True}
         elif args.fs_action == "warn":
-            threshold = getattr(args, 'threshold', 5) or 5
+            threshold = getattr(args, 'threshold', None)
+            if threshold is None:
+                threshold = 5
             result = foreshadow.warn_expiring(project_dir, threshold)
         else:
             result = {"error": f"Unknown foreshadow action: {args.fs_action}"}

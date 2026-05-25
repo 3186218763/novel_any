@@ -1,6 +1,7 @@
 """世界观规则管理 — CRUD + 冲突检测."""
 
 import json
+import re
 from novel_tools.bible.model import get_db, _uid, rows_to_list
 
 
@@ -88,9 +89,10 @@ def check_conflicts(project_dir: str, new_content: str) -> list[dict]:
     for rule in hard_rules:
         r = dict(rule)
         # 简单检查：如果新内容有否定词但主题关键词重叠 → 可能存在冲突
-        content_words = set(new_content)
-        rule_words = set(r["content"])
-        overlap = content_words & rule_words
+        # 提取关键词（2-5字词组）进行比较，避免逐字集合的误报
+        content_keywords = set(re.findall(r'[\u4e00-\u9fff]{2,5}', new_content))
+        rule_keywords = set(re.findall(r'[\u4e00-\u9fff]{2,5}', r["content"]))
+        overlap = content_keywords & rule_keywords
         if len(overlap) > 3 and has_negation:
             conflicts.append({
                 "rule_id": r["id"],

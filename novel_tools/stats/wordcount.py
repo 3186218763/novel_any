@@ -14,8 +14,11 @@ def count_chapter(filepath: str) -> dict:
     if not path.exists():
         return {"error": f"File not found: {filepath}"}
 
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except (UnicodeDecodeError, PermissionError, IOError) as e:
+        return {"error": str(e)}
 
     # 中文字数
     chinese_chars = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]', text))

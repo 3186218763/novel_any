@@ -2,6 +2,7 @@
 
 import re
 from novel_tools.config import find_chapter_files
+from novel_tools.bible.character import list_all
 
 
 def scan_name_variants(text: str, known_names: list[str]) -> dict:
@@ -85,11 +86,17 @@ def scan_all(project_dir: str) -> dict:
         return {"error": "No chapter files found", "results": []}
 
     results = []
+    # 获取已知角色名列表
+    try:
+        characters = list_all(project_dir)
+        known_names = [c["name"] for c in characters]
+    except Exception:
+        known_names = []
     for f in chapter_files:
         try:
             with open(f, encoding="utf-8") as fh:
                 text = fh.read()
-            variants = scan_name_variants(text, [])
+            variants = scan_name_variants(text, known_names)
             ambiguity = scan_pronoun_ambiguity(text)
             results.append({
                 "file": f,

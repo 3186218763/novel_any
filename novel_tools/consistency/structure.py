@@ -102,7 +102,7 @@ def check_coverage(project_dir: str) -> dict:
         # 查找匹配的章纲
         matching_outline = None
         for of in outline_files:
-            if f"第{ch_num}" in of.stem or f"章纲_第{ch_num}" in of.stem:
+            if re.search(rf'第{ch_num}章(?!\\d)', of.stem) or re.search(rf'章纲_第{ch_num}章(?!\\d)', of.stem):
                 matching_outline = of
                 break
 

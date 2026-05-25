@@ -15,8 +15,11 @@ def analyze_pacing(filepath: str) -> dict:
     if not path.exists():
         return {"error": f"File not found: {filepath}"}
 
-    with open(path, encoding="utf-8") as f:
-        text = f.read()
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except (UnicodeDecodeError, PermissionError, IOError) as e:
+        return {"error": str(e)}
 
     # 总中文字数
     chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', text)) or 1  # 避免除零
