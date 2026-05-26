@@ -6,6 +6,20 @@ import urllib.parse
 from novel_tools.pipeline.db import add_review
 
 
+def _clean_book_title(title: str) -> str:
+    """去除书名中的噪音后缀，提高搜索匹配率."""
+    suffixes = [
+        '完结时间', '什么软件能看', '全文免费阅读', '免费阅读',
+        '全文阅读', '无弹窗', '笔趣阁', 'txt下载', '精校版',
+        '最新', '全文', '完整版', '全集', '笔趣阁',
+    ]
+    for s in suffixes:
+        title = title.replace(s, '')
+    # 去掉括号内容
+    title = re.sub(r'[（(][^)）]*[)）]', '', title)
+    return title.strip()
+
+
 def _get_session():
     import os
     import requests
@@ -149,7 +163,7 @@ def scrape_reviews_for_book(book_id: int, book_title: str, sources: list[str] | 
     stats = {"douban": 0, "tieba": 0}
 
     if "douban" in sources:
-        reviews = scrape_douban_reviews(book_title)
+        reviews = scrape_douban_reviews(_clean_book_title(book_title))
         for r in reviews:
             add_review(book_id, "douban", r["content"],
                       sentiment="negative" if r.get("rating", 3) <= 2 else "positive",
@@ -158,7 +172,7 @@ def scrape_reviews_for_book(book_id: int, book_title: str, sources: list[str] | 
         time.sleep(1)
 
     if "tieba" in sources:
-        reviews = scrape_tieba_posts(book_title)
+        reviews = scrape_tieba_posts(_clean_book_title(book_title))
         for r in reviews:
             add_review(book_id, "tieba", r["content"], sentiment="", keywords="")
         stats["tieba"] = len(reviews)
