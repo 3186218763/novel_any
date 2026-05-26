@@ -126,7 +126,7 @@ DIMENSION_MODULE: dict[str, str] = {
 # Thresholds: when tool metrics cross these, the tool considers the dimension "bad"
 # metric_path: dotted path into the metrics dict (e.g. "readability.flesch_zh")
 _TOOL_THRESHOLDS: dict[str, dict] = {
-    "pacing": {"metric": "action_density", "op": "lt", "value": 0.4},
+    "pacing": {"metric": "action_density", "op": "lt", "value": 15},
     "readability": {"metric": "readability.flesch_zh", "op": "lt", "value": 30},
     "emotion_arc": {"metric": "variance", "op": "lt", "value": 0.1},
     "redundancy": {"metric": "total_issues", "op": "gt", "value": 5},
