@@ -123,6 +123,11 @@ def analyze_text(text: str) -> dict:
     chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', text)) or 1
     bl_density = round(total_hits / (chinese_chars / 100), 1)  # 每百字命中数
 
+    # 短语重复检测（模板化描写）
+    from novel_tools.slop.scanner import scan_phrase_repetition
+    phrase_rep = scan_phrase_repetition(text)
+    phrase_rep_score = phrase_rep.get("phrase_repetition_score", 0)
+
     return {
         "ttr": ttr,
         "hapax_ratio": hapax,
@@ -136,6 +141,8 @@ def analyze_text(text: str) -> dict:
         "structure_patterns": structure,
         "structure_pattern_count": len(structure),
         "repetition_score": rep_score,
+        "phrase_repetition_score": phrase_rep_score,
+        "repeated_phrases": phrase_rep.get("repeated_phrases", [])[:10],
     }
 
 
@@ -171,8 +178,15 @@ def score_ai_risk(metrics: dict) -> dict:
     rep = metrics.get("repetition_score", 0)
     scores["repetition"] = max(0, min(100, int((rep - 0.3) * 250)))
 
+    # 短语重复（模板化描写）: > 20 → 高风险
+    phrase_rep = metrics.get("phrase_repetition_score", 0)
+    scores["phrase_rep"] = min(100, phrase_rep)
+
     # 加权合成
-    weights = {"ttr": 0.25, "sentence_variance": 0.20, "structure": 0.15, "blacklist": 0.25, "repetition": 0.15}
+    weights = {
+        "ttr": 0.20, "sentence_variance": 0.15, "structure": 0.15,
+        "blacklist": 0.20, "repetition": 0.15, "phrase_rep": 0.15,
+    }
     total = sum(scores[k] * weights[k] for k in weights)
 
     if total < 30:

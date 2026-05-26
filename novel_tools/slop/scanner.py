@@ -182,3 +182,35 @@ def scan_chinese_weasel(text: str) -> dict:
         "total_hits": sum(len(v) for v in results.values()),
         "by_category": results,
     }
+
+
+def scan_phrase_repetition(text: str, min_len: int = 3, min_count: int = 3) -> dict:
+    """扫描文本中重复出现的短语——检测模板化描写（如\"惊才绝艳\"用了N次）.
+
+    Returns:
+        dict with repeated_phrases list and total_repetition_score.
+    """
+    from collections import Counter
+
+    # 提取所有中文片段
+    chars = re.findall(r"[\u4e00-\u9fff]+", text)
+    full_text = "".join(chars)
+
+    phrase_counter: Counter = Counter()
+    # 滑动窗口：2-5 字短语
+    for l in range(min_len, 6):
+        for i in range(len(full_text) - l + 1):
+            phrase = full_text[i : i + l]
+            phrase_counter[phrase] += 1
+
+    # 过滤掉单字符和只出现 1-2 次的
+    repeated = [(p, c) for p, c in phrase_counter.most_common(50) if c >= min_count and len(p) >= min_len]
+
+    # 评分：重复短语越多，分数越高（每个重复短语加 5 分，上限 100）
+    score = min(len(repeated) * 5, 100)
+
+    return {
+        "repeated_phrases": [{"phrase": p, "count": c} for p, c in repeated[:20]],
+        "repeated_phrase_count": len(repeated),
+        "phrase_repetition_score": score,
+    }

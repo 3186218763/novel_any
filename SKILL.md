@@ -233,6 +233,17 @@ python -m novel_tools.pipeline.pipeline review
 
 **抓取注意事项：** 移动端 (`m.bqglll.cc`) 章节页被 Cloudflare JS Challenge 拦截，必须使用桌面版 (`www.bqglll.cc`) + URL 追加 `?get=content` 触发服务端渲染。章节列表在 `<div class="listmain"> > <dl> > <dd>` 结构中，`href` 后可能有空格。详见 `references/biquge-scraping.md`。
 
+**验证器阈值陷阱：**
+- `pacing.action_density` 是「每千字动作元素数」（值域 ~10-50），NOT 0-1 比例。阈值应设为 15（低于 15 = 节奏慢），而非 0.4。
+- `ai_score.total_score` 在分析输出的顶层，不在嵌套对象中。不要用 `risk.score`（该字段为空）。
+- `style_lint` 的分析输出使用 `total_issues` 字段（非 `redundancy_count`）。
+
+**分类页抓取：** bqglll.cc 移动版分类页（`/xuanhuan/` 等）可用 `<a href="/look/NNN/">` 正则提取，BeautifulSoup 的 `div.block` 选择器不匹配移动版结构。
+
+**排行榜陷阱：** bqglll.cc `/top/` 排行榜前列多为成人向内容，建议优先使用首页推荐或分类页作为数据源。
+
+**豆瓣评论：** 需要代理（`HTTP_PROXY` 环境变量），搜索结果的 subject ID 被 URL-encoded 在 `/link2/?url=...%2Fsubject%2F{id}%2F...` 中。
+
 依赖：jieba（必选），SnowNLP/pypinyin/NetworkX（可选）
 数据文件：`hanzi_strokes.json` 从 Unicode Unihan 生成 → `references/hanzi-stroke-generation.md`
 

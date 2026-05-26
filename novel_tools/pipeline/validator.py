@@ -130,7 +130,7 @@ _TOOL_THRESHOLDS: dict[str, dict] = {
     "readability": {"metric": "readability.flesch_zh", "op": "lt", "value": 30},
     "emotion_arc": {"metric": "variance", "op": "lt", "value": 0.1},
     "redundancy": {"metric": "total_issues", "op": "gt", "value": 5},
-    "ai_score": {"metric": "total_score", "op": "gt", "value": 50},
+    "ai_score": {"metric": "total_score", "op": "gt", "value": 20},
 }
 
 
@@ -228,6 +228,19 @@ def _tool_is_bad_for_dimension(metrics: dict, dimension: str) -> tuple[bool, dic
 
     Returns (is_bad, detail_dict).
     """
+    # 复合检测：pacing 同时检查 action_density + narration_ratio（水文检测）
+    if dimension == "pacing":
+        from novel_tools.pipeline.validator import _TOOL_THRESHOLDS
+        detail = _tool_normal_metrics_for_dimension(metrics, "pacing")
+        is_bad = detail["is_bad"]
+        # 补充：叙述比例过高也说明节奏慢（"水文"）
+        narration = metrics.get("narration_ratio", 0)
+        if not is_bad and narration > 0.75:
+            is_bad = True
+            detail["metric_name"] += "+narration_ratio"
+            detail["metric_value"] = f"{detail['metric_value']}|narration={narration:.1%}"
+        return is_bad, detail
+
     detail = _tool_normal_metrics_for_dimension(metrics, dimension)
     return detail["is_bad"], detail
 
