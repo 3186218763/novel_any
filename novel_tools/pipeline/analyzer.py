@@ -118,5 +118,12 @@ def analyze_book(book_id: int) -> str:
                 tool_version=TOOL_VERSION,
             )
 
+    # ── 跨章模板检测 ──────────────────────────────────
+    if len(chapters) >= 2:
+        from novel_tools.slop.cross_chapter import detect_template_patterns
+        chapter_texts = [_read_file(ch["file_path"]) for ch in chapters]
+        template_result = detect_template_patterns(chapter_texts)
+        save_analysis(run_id, book_id, 0, "cross_chapter", template_result, TOOL_VERSION)
+
     touch_book(book_id)
     return run_id

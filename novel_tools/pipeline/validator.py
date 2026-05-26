@@ -42,11 +42,11 @@ _KEYWORD_RULES: list[tuple[str, str, str]] = [
     ("挂机", "character_consistency", "negative"),
     # ── ai_score ──
     ("AI", "ai_score", "negative"),
-    ("套路", "ai_score", "negative"),
-    ("模板", "ai_score", "negative"),
-    ("刻板", "ai_score", "negative"),
-    ("老套", "ai_score", "negative"),
-    ("千篇一律", "ai_score", "negative"),
+    ("套路", "template_score", "negative"),
+    ("模板", "template_score", "negative"),
+    ("刻板", "template_score", "negative"),
+    ("老套", "template_score", "negative"),
+    ("千篇一律", "template_score", "negative"),
     # ── readability ──
     ("读不下去", "readability", "negative"),
     ("太绕", "readability", "negative"),
@@ -97,8 +97,8 @@ DIMENSION_MAP: dict[str, str] = {
     "角色崩": "character_consistency",
     "人设": "character_consistency",
     "AI": "ai_score",
-    "套路": "ai_score",
-    "模板": "ai_score",
+    "套路": "template_score",
+    "模板": "template_score",
     "读不下去": "readability",
     "太绕": "readability",
     "情绪": "emotion_arc",
@@ -121,6 +121,7 @@ DIMENSION_MODULE: dict[str, str] = {
     "redundancy": "style_lint",
     "timeline": "stats",
     "outline_deviation": "stats",
+    "template_score": "cross_chapter",
 }
 
 # Thresholds: when tool metrics cross these, the tool considers the dimension "bad"
@@ -131,6 +132,7 @@ _TOOL_THRESHOLDS: dict[str, dict] = {
     "emotion_arc": {"metric": "avg_intensity", "op": "lt", "value": 0.3},
     "redundancy": {"metric": "summary.total", "op": "gt", "value": 5},
     "ai_score": {"metric": "total_score", "op": "gt", "value": 20},
+    "template_score": {"metric": "template_score", "op": "gt", "value": 30},
 }
 
 
