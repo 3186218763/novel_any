@@ -7,6 +7,7 @@ from novel_tools.pipeline.db import add_review
 
 
 def _get_session():
+    import os
     import requests
     s = requests.Session()
     s.headers.update({
@@ -14,6 +15,12 @@ def _get_session():
         "Accept": "text/html,application/json",
         "Accept-Language": "zh-CN,zh;q=0.9",
     })
+    # 通过环境变量支持代理（国内访问豆瓣等需要）
+    for proto in ("HTTP", "HTTPS"):
+        env_key = f"{proto}_PROXY"
+        proxy = os.environ.get(env_key)
+        if proxy:
+            s.proxies[proto.lower()] = proxy
     return s
 
 
@@ -37,8 +44,12 @@ def scrape_douban_reviews(book_title: str, limit: int = 20) -> list[dict]:
     try:
         r = session.get(search_url, timeout=15)
         r.encoding = 'utf-8'
-        # Extract subject ID from search results
-        subject_match = re.search(r'subject/(\d+)/', r.text)
+        html_text = r.text
+        # 豆瓣搜索结果通过 /link2/?url=... 跳转，从 URL 编码中提取 subject ID
+        subject_match = re.search(r'/link2/\?url=.*?subject%2F(\d+)%2F', html_text)
+        if not subject_match:
+            # 回退：直接搜索 subject/数字/
+            subject_match = re.search(r'subject/(\d+)/', html_text)
         if not subject_match:
             print(f"[douban] 未找到书籍: {book_title}")
             return reviews
