@@ -124,12 +124,13 @@ DIMENSION_MODULE: dict[str, str] = {
 }
 
 # Thresholds: when tool metrics cross these, the tool considers the dimension "bad"
+# metric_path: dotted path into the metrics dict (e.g. "readability.flesch_zh")
 _TOOL_THRESHOLDS: dict[str, dict] = {
-    "pacing": {"metric": "density", "op": "lt", "value": 0.4},
-    "readability": {"metric": "flesch_zh", "op": "lt", "value": 30},
+    "pacing": {"metric": "action_density", "op": "lt", "value": 0.4},
+    "readability": {"metric": "readability.flesch_zh", "op": "lt", "value": 30},
     "emotion_arc": {"metric": "variance", "op": "lt", "value": 0.1},
-    "redundancy": {"metric": "redundancy_count", "op": "gt", "value": 5},
-    "ai_score": {"metric": "ai_score", "op": "gt", "value": 50},
+    "redundancy": {"metric": "total_issues", "op": "gt", "value": 5},
+    "ai_score": {"metric": "risk.score", "op": "gt", "value": 50},
 }
 
 
@@ -182,15 +183,22 @@ def _tool_normal_metrics_for_dimension(
             "module": DIMENSION_MODULE.get(dimension, "unknown"),
         }
 
-    metric_name = threshold_spec["metric"]
-    metric_value = metrics.get(metric_name)
+    metric_path = threshold_spec["metric"]
     op = threshold_spec["op"]
     threshold = threshold_spec["value"]
 
+    # Resolve dotted path: "readability.flesch_zh" -> metrics["readability"]["flesch_zh"]
+    metric_value = metrics
+    for part in metric_path.split("."):
+        if isinstance(metric_value, dict):
+            metric_value = metric_value.get(part)
+        else:
+            metric_value = None
+            break
     if metric_value is None:
         # Metric not present in output — cannot judge
         return {
-            "metric_name": metric_name,
+            "metric_name": metric_path,
             "metric_value": None,
             "threshold": threshold,
             "op": op,
@@ -206,7 +214,7 @@ def _tool_normal_metrics_for_dimension(
         is_bad = False
 
     return {
-        "metric_name": metric_name,
+        "metric_name": metric_path,
         "metric_value": metric_value,
         "threshold": threshold,
         "op": op,
