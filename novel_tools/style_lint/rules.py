@@ -90,7 +90,7 @@ def quick_scan(text: str) -> dict:
     # 1. 副词密度: 检测 "地" 字短语（描写过度）
     de_phrases = re.findall(r'[\u4e00-\u9fff]{1,3}地', text)
     de_density = len(de_phrases) / (chinese_chars / 100)
-    if de_density > 3:
+    if de_density > 2:
         issues.append({"type": "adverb_abuse", "severity": "warn",
                        "text": f"副词密度 {de_density:.1f}/百字",
                        "suggestion": f"'{'地'}' 短语 {len(de_phrases)} 个，描写可能过于密集"})
@@ -117,10 +117,18 @@ def quick_scan(text: str) -> dict:
 
     # 4. 双字重复: "阵阵"、"纷纷"、"缓缓" 等
     doubled = re.findall(r'([\u4e00-\u9fff])\\1', text)
-    if len(doubled) > 3:
+    if len(doubled) > 2:
         issues.append({"type": "redundancy", "severity": "info",
                        "text": f"叠词 {len(doubled)} 处",
                        "suggestion": f"叠词 ({','.join(set(d[:2] for d in doubled)[:5])}) 重复使用"})
+
+    # 5. "了" 字密度: 网文常见冗余标志
+    le_count = text.count('了')
+    le_density = le_count / (chinese_chars / 100)
+    if le_density > 8:
+        issues.append({"type": "redundancy", "severity": "info",
+                       "text": f"'了' 字密度 {le_density:.1f}/百字",
+                       "suggestion": f"'了' 字 {le_count} 个，句子可能过于单调"})
 
     return {
         "issues": issues,
