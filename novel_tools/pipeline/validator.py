@@ -152,7 +152,14 @@ def _extract_dimensions_simple(text: str) -> list[tuple[str, str]]:
 
     for keyword, dimension, sentiment in sorted_rules:
         if keyword in text and dimension not in matched_dimensions:
-            results.append((dimension, sentiment))
+            # Negation check: "少了老套" = NOT cliché → flip sentiment
+            actual_sentiment = sentiment
+            idx = text.index(keyword)
+            prefix = text[max(0, idx - 5):idx]
+            negation_words = ["少了", "没有", "不是", "避免", "不像", "没什么", "毫无", "不"]
+            if any(nw in prefix for nw in negation_words):
+                actual_sentiment = "positive" if sentiment == "negative" else "negative"
+            results.append((dimension, actual_sentiment))
             matched_dimensions.add(dimension)
 
     return results
@@ -313,6 +320,20 @@ def validate_book(
     if not review_dims:
         return stats
 
+    # ── 加载全书级分析（cross_chapter, style_lint_book）──
+    book_analyses: dict[str, dict] = {}
+    from novel_tools.pipeline.db import get_db as _get_db
+    _db = _get_db()
+    book_rows = _db.execute(
+        "SELECT * FROM analyses WHERE book_id = ? AND chapter_id = 0", (book_id,)
+    ).fetchall()
+    for row in book_rows:
+        try:
+            book_analyses[row["module"]] = json.loads(row["metrics"])
+        except (json.JSONDecodeError, TypeError):
+            book_analyses[row["module"]] = {}
+    _db.close()
+
     # ── Iterate chapters ─────────────────────────────────────────────────
     for chapter in chapters:
         chapter_id = chapter["id"]
@@ -342,7 +363,7 @@ def validate_book(
 
             for dimension, review_sentiment in dims:
                 tool_module = DIMENSION_MODULE.get(dimension, "stats")
-                metrics = module_metrics.get(tool_module, {})
+                metrics = module_metrics.get(tool_module, book_analyses.get(tool_module, {}))
 
                 is_bad, detail = _tool_is_bad_for_dimension(metrics, dimension, chapter_chars=chapter_chars)
 
