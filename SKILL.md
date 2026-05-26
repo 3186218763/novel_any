@@ -244,7 +244,29 @@ python -m novel_tools.pipeline.pipeline review
 
 **排行榜陷阱：** bqglll.cc `/top/` 排行榜前列多为成人向内容，建议优先使用首页推荐或分类页作为数据源。
 
-**豆瓣评论：** 需要代理（`HTTP_PROXY` 环境变量），搜索结果的 subject ID 被 URL-encoded 在 `/link2/?url=...%2Fsubject%2F{id}%2F...` 中。
+**豆瓣评论：** 需要代理（`HTTP_PROXY` 环境变量），搜索结果的 subject ID 被 URL-encoded 在 `/link2/?url=...%2Fsubject%2F{id}%2F...` 中。书名中的噪音后缀（如"完结时间""什么软件能看"）需先清洗再搜索。
+
+### 工具验证闭环
+
+验证 novel_tools 准确性的标准流程（`references/tool-validation-pattern.md`）：
+
+```
+pipeline 抓取15本书 → 分析 → 豆瓣评论验证 → 发现 gap → 修工具 → 重跑验证
+```
+
+**已校准的阈值（v0.3.0 实测）**：
+| 模块 | 指标 | 阈值 | 说明 |
+|------|------|------|------|
+| pacing | action_density | <15 = 节奏慢 | 值域 ~10-50，非 0-1。另检查 narration_ratio>0.75 作为"水文"信号 |
+| ai_score | total_score | >20 = AI味重 | 含 phrase_repetition 加权。不要用 risk.score（为空） |
+| emotion | intensity_variance | <0.08 = 平淡 | 情绪波动标准差，替代 avg_intensity |
+| redundancy | summary.total | >5 = 啰嗦 | 短文本(<2000字)阈值自适应降为 1 |
+
+**跨章分析**：`cross_chapter` 模块检测模板化写作（开头模式重复、章节长度分布一致性、对话比例方差），存储为 `book_id + chapter_id=0` 级别，验证时需从 `book_analyses` 回退查找。
+
+**关键词否定检测**：验证器中评论关键词匹配需检查前 5 字是否有否定词（"少了""没有""不是""避免"等），防止"少了老套"误判为负面。
+
+**已知局限**：所有笔趣阁镜像站的章节为预览片段（1079字），非完整内容。style_lint 和 emotion 的精度受短文本限制。
 
 依赖：jieba（必选），SnowNLP/pypinyin/NetworkX（可选）
 数据文件：`hanzi_strokes.json` 从 Unicode Unihan 生成 → `references/hanzi-stroke-generation.md`

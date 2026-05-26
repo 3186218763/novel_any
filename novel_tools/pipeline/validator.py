@@ -129,8 +129,8 @@ DIMENSION_MODULE: dict[str, str] = {
 _TOOL_THRESHOLDS: dict[str, dict] = {
     "pacing": {"metric": "action_density", "op": "lt", "value": 15},
     "readability": {"metric": "readability.flesch_zh", "op": "lt", "value": 30},
-    "emotion_arc": {"metric": "avg_intensity", "op": "lt", "value": 0.3},
-    "redundancy": {"metric": "summary.total", "op": "gt", "value": 5},
+    "emotion_arc": {"metric": "intensity_variance", "op": "lt", "value": 0.08},
+    "redundancy": {"metric": "summary.total", "op": "gte", "value": 1},
     "ai_score": {"metric": "total_score", "op": "gt", "value": 20},
     "template_score": {"metric": "template_score", "op": "gt", "value": 30},
 }
@@ -219,6 +219,10 @@ def _tool_normal_metrics_for_dimension(
         is_bad = metric_value < threshold
     elif op == "gt":
         is_bad = metric_value > threshold
+    elif op == "gte":
+        is_bad = metric_value >= threshold
+    elif op == "lte":
+        is_bad = metric_value <= threshold
     else:
         is_bad = False
 
@@ -250,7 +254,7 @@ def _tool_is_bad_for_dimension(metrics: dict, dimension: str, chapter_chars: int
 
     # 自适应阈值：短文本降低 redundancy 检测门槛
     if dimension == "redundancy":
-        threshold = 1 if chapter_chars < 2000 else 5
+        threshold = 0 if chapter_chars < 2000 else 1
         detail = _tool_normal_metrics_for_dimension(metrics, "redundancy")
         detail["threshold"] = threshold
         detail["is_bad"] = detail["metric_value"] is not None and detail["metric_value"] > threshold
