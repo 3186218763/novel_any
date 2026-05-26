@@ -195,6 +195,8 @@ delegate_task(
 > 抓取技术参考：`references/biquge-scraping.md`
 > 豆瓣评论抓取：`references/douban-scraping.md`
 > GitHub 爬虫项目调研：`references/github-scraper-research.md`
+> Pipeline 使用：`references/pipeline-usage.md`
+> **验证报告**: 项目目录下 `docs/superpowers/specs/2026-05-26-novel-tools-validation-report.md`
 
 v0.1.0 已有 5 个模块的完整实现。v0.2.0 渐进增强 + 新增 style_lint。v0.3.0 新增 pipeline 流水线子系统。
 

@@ -108,6 +108,13 @@ def extract_emotion_curve(filepath: str, segments: int = 40,
 
     intensities = [p["intensity"] for p in curve]
     avg_intensity = round(sum(intensities) / len(intensities), 3) if intensities else 0
+    # 情绪波动幅度（标准差）— 越低越平淡
+    if len(intensities) > 1:
+        mean = sum(intensities) / len(intensities)
+        variance = sum((v - mean) ** 2 for v in intensities) / len(intensities)
+        intensity_variance = round(variance ** 0.5, 4)
+    else:
+        intensity_variance = 0.0
     threshold = avg_intensity * 1.5 if avg_intensity > 0 else 0.5
     peaks = [p["position"] for p in curve if p["intensity"] >= max(threshold, 0.2)]
 
@@ -119,6 +126,7 @@ def extract_emotion_curve(filepath: str, segments: int = 40,
         "curve": curve,
         "peaks": peaks,
         "avg_intensity": avg_intensity,
+        "intensity_variance": intensity_variance,
         "peak_count": len(peaks),
         "emotion_keywords": {word: count for word, count in sorted_hits},
         "arc_type": arc_type,
