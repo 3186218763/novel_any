@@ -15,7 +15,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import db
-from .scraper_rules import get_rules_for_url, list_supported_domains
+from .scraper_rules import get_rules_for_url, list_supported_domains, SITE_RULES
 
 BASE_URL = "https://m.bqglll.cc"
 WWW_URL = "https://www.bqglll.cc"
@@ -99,20 +99,31 @@ def _fetch(url: str, session=None) -> str | None:
 
 # ── 内容清洗 ─────────────────────────────────────────
 
-def _clean_chapter_content(html_text: str) -> str:
-    """从 HTML 中提取并清洗章节正文."""
+def _clean_chapter_content(html_text: str, content_selector: dict | None = None) -> str:
+    """从 HTML 中提取并清洗章节正文.
+
+    Args:
+        html_text: 原始 HTML 文本
+        content_selector: BeautifulSoup.find() 用的属性字典，如 {'id': 'content'}
+                          若为 None 则回退到 CONTENT_IDS 列表尝试
+    """
     soup = BeautifulSoup(html_text, "lxml")
 
     # 移除 script / style 等标签
     for tag in soup(["script", "style", "noscript", "iframe"]):
         tag.decompose()
 
-    # 尝试从已知容器提取正文
+    # 优先使用规则引擎指定的选择器
     content_div = None
-    for cid in CONTENT_IDS:
-        content_div = soup.find(id=cid)
-        if content_div:
-            break
+    if content_selector:
+        content_div = soup.find(**content_selector)
+
+    # 规则选择器未命中则回退到已知 ID 列表
+    if content_div is None:
+        for cid in CONTENT_IDS:
+            content_div = soup.find(id=cid)
+            if content_div:
+                break
 
     if content_div is None:
         content_div = soup.body or soup
@@ -134,40 +145,99 @@ def _clean_chapter_content(html_text: str) -> str:
 
 # ── 公共抓取 API ────────────────────────────────────
 
-def fetch_homepage_books(limit: int = 10) -> list[dict]:
-    """从 bqglll.cc 首页抓取书籍列表.
+def fetch_homepage_books(limit: int = 10, domain: str | None = None) -> list[dict]:
+    """从小说站点首页抓取书籍列表.
+
+    Args:
+        limit: 最大返回数量
+        domain: 目标域名（如 'bqglll.cc', 'biquge.com.cn'）。
+                若为 None 则使用默认的 bqglll.cc
 
     Returns:
         [{"title": str, "author": str, "url": str}, ...]
     """
+    target_domain = domain or DEFAULT_DOMAIN
+
     session = _get_session()
-    html_text = _fetch(BASE_URL, session)
-    if not html_text:
-        # 尝试桌面版作为回退
-        print("[INFO] 移动版首页不可用，尝试桌面版...")
-        html_text = _fetch(WWW_URL, session)
+
+    # 构建首页 URL
+    if target_domain == DEFAULT_DOMAIN:
+        base = BASE_URL
+        www = WWW_URL
+        html_text = _fetch(base, session)
+        if not html_text:
+            print("[INFO] 移动版首页不可用，尝试桌面版...")
+            html_text = _fetch(www, session)
+    else:
+        base = f"https://m.{target_domain}"
+        www = f"https://www.{target_domain}"
+        # 先尝试移动版
+        html_text = _fetch(base, session)
+        if not html_text:
+            html_text = _fetch(www, session)
+        # 如果 m/www 都失败，尝试裸域名
+        if not html_text:
+            bare = f"https://{target_domain}"
+            html_text = _fetch(bare, session)
+            if html_text:
+                base = bare
+
     if not html_text:
         print("[ERROR] 无法访问首页")
         return []
 
-    book_pattern = re.compile(
-        r'<a href="(/look/\d+/)"[^>]*>([^<]+)</a>.*?<span[^>]*>([^<]+)</span>',
-        re.DOTALL,
-    )
+    # bqglll.cc 专用 regex（不适用于其他站点）
+    if target_domain == DEFAULT_DOMAIN:
+        book_pattern = re.compile(
+            r'<a href="(/look/\d+/)"[^>]*>([^<]+)</a>.*?<span[^>]*>([^<]+)</span>',
+            re.DOTALL,
+        )
 
-    books = []
-    for match in book_pattern.finditer(html_text):
-        path = match.group(1)
-        title = match.group(2).strip()
-        author = match.group(3).strip()
-        url = BASE_URL + path
-        # 按 url 去重
-        if not any(b["url"] == url for b in books):
-            books.append({"title": title, "author": author, "url": url})
-        if len(books) >= limit:
-            break
+        books = []
+        for match in book_pattern.finditer(html_text):
+            path = match.group(1)
+            title = match.group(2).strip()
+            author = match.group(3).strip()
+            url = BASE_URL + path
+            if not any(b["url"] == url for b in books):
+                books.append({"title": title, "author": author, "url": url})
+            if len(books) >= limit:
+                break
+    else:
+        # 通用解析：使用 BeautifulSoup 提取链接和文本
+        soup = BeautifulSoup(html_text, "lxml")
+        books = []
+        seen_urls = set()
 
-    print(f"[INFO] 从首页发现 {len(books)} 本书")
+        # 查找所有书籍链接（常见模式：<a> 包含书名，附近有作者 <span>）
+        for a_tag in soup.find_all("a", href=True):
+            title = a_tag.get_text(strip=True)
+            href = a_tag["href"].strip()
+            if not title or len(title) < 2 or href == "#":
+                continue
+            # 跳过导航链接
+            skip = ("首页", "排行", "分类", "搜索", "关于", "登录", "注册",
+                    "更多", "全部", "书库", "书架")
+            if any(title == s for s in skip):
+                continue
+            full_url = urljoin(base, href)
+            if full_url in seen_urls:
+                continue
+            seen_urls.add(full_url)
+
+            # 尝试找作者
+            author = ""
+            parent = a_tag.parent
+            if parent:
+                span = parent.find("span")
+                if span:
+                    author = span.get_text(strip=True)
+
+            books.append({"title": title, "author": author, "url": full_url})
+            if len(books) >= limit:
+                break
+
+    print(f"[INFO] 从 {target_domain} 首页发现 {len(books)} 本书")
     return books
 
 
@@ -315,39 +385,86 @@ def fetch_ranking_books(page: int = 1, limit: int = 10) -> list[dict]:
 
 
 def fetch_book_chapters(book_url: str, max_chapters: int = 50) -> list[dict]:
-    """从书籍目录页获取章节列表（使用 www 版避免 Cloudflare 拦截）.
+    """从书籍目录页获取章节列表.
+
+    使用规则引擎适配不同站点。若站点不支持则回退到 bqglll.cc 的 regex 方式。
 
     Returns:
         [{"chapter_no": int, "title": str, "url": str}, ...]
     """
     session = _get_session()
-    # 将 m.bqglll.cc 转为 www.bqglll.cc（桌面版有完整章节列表）
-    www_url = book_url.replace("m.bqglll.cc", "www.bqglll.cc")
-    html_text = _fetch(www_url, session)
+    rules = get_rules_for_url(book_url)
+
+    # 提取 base URL 用于拼接相对路径
+    parsed = urlparse(book_url)
+    base_domain = f"{parsed.scheme}://{parsed.netloc}"
+
+    html_text = _fetch(book_url, session)
     if not html_text:
-        print(f"[ERROR] 无法访问书籍页面: {www_url}")
+        print(f"[ERROR] 无法访问书籍页面: {book_url}")
         return []
 
-    # www 版章节在 <div class="listmain"> > <dl> > <dd><a href ="/look/NNN/MMMM.html">标题</a></dd>
-    # href 后面有空格: href ="/look/..."
+    # ── 规则引擎路径：使用 BeautifulSoup + 选择器 ──
+    if rules:
+        ch_sel, _, _ = rules
+        soup = BeautifulSoup(html_text, "lxml")
+        container = soup.find(**ch_sel)
+        chapters: list[dict] = []
+        seen: set[str] = set()
+
+        if container:
+            # 查找容器内所有 <a> 链接（通常在 <dd><a> 中）
+            for a_tag in container.find_all("a", href=True):
+                href = a_tag["href"].strip()
+                title = a_tag.get_text(strip=True)
+                if not title or not href or href == "#":
+                    continue
+                # 跳过明显的非章节链接（如分页、首页等）
+                skip_texts = ("首页", "上一页", "下一页", "末页", "返回", "目录",
+                              "next", "prev", "home", ">>", "<<")
+                if any(s in title for s in skip_texts):
+                    continue
+                # 解析完整 URL
+                chapter_url = urljoin(book_url, href)
+                if chapter_url in seen:
+                    continue
+                seen.add(chapter_url)
+                chapter_no = len(chapters) + 1
+                chapters.append({
+                    "chapter_no": chapter_no,
+                    "title": title,
+                    "url": chapter_url,
+                })
+
+        chapters = chapters[:max_chapters]
+        print(f"[INFO] 从 {book_url} 发现 {len(chapters)} 章 (规则引擎)")
+        return chapters
+
+    # ── 回退：bqglll.cc 专用 regex ──
+    www_url = book_url.replace("m.bqglll.cc", "www.bqglll.cc")
+    if www_url != book_url:
+        html_text = _fetch(www_url, session)
+        if not html_text:
+            print(f"[ERROR] 无法访问书籍页面: {www_url}")
+            return []
+        book_url = www_url
+
     chapter_pattern = re.compile(
         r'<dd>\s*<a\s+href\s*=\s*"((?:/look/\d+/)?(\d+)\.html)"\s*>\s*([^<]+?)\s*</a>\s*</dd>',
         re.DOTALL,
     )
 
     chapters = []
-    seen = set()
+    seen_nums = set()
     for match in chapter_pattern.finditer(html_text):
         path = match.group(1)
         chapter_no = int(match.group(2))
         title = match.group(3).strip()
-        if chapter_no in seen:
+        if chapter_no in seen_nums:
             continue
-        seen.add(chapter_no)
-        # 补全路径
+        seen_nums.add(chapter_no)
         if not path.startswith("/look/"):
-            # 提取 book id 从 www_url
-            book_id_match = re.search(r"/look/(\d+)/", www_url)
+            book_id_match = re.search(r"/look/(\d+)/", book_url)
             if book_id_match:
                 path = f"/look/{book_id_match.group(1)}/{path}"
         url = WWW_URL + path
@@ -355,21 +472,101 @@ def fetch_book_chapters(book_url: str, max_chapters: int = 50) -> list[dict]:
 
     chapters.sort(key=lambda c: c["chapter_no"])
     chapters = chapters[:max_chapters]
-    print(f"[INFO] 从 {www_url} 发现 {len(chapters)} 章")
+    print(f"[INFO] 从 {book_url} 发现 {len(chapters)} 章 (regex 回退)")
     return chapters
 
 
 def fetch_chapter_content(chapter_url: str) -> str:
-    """下载并清洗单章内容（使用 www 版 + ?get=content 参数绕过 Cloudflare）."""
+    """下载并清洗单章内容.
+
+    使用规则引擎适配不同站点的内容选择器。
+    """
     session = _get_session()
-    www_url = chapter_url.replace("m.bqglll.cc", "www.bqglll.cc")
-    # 添加 ?get=content 参数触发服务端渲染内容
-    if "?" not in www_url:
-        www_url += "?get=content"
-    html_text = _fetch(www_url, session)
+    rules = get_rules_for_url(chapter_url)
+
+    # 获取内容选择器（若站点有规则）
+    content_selector = None
+    if rules:
+        _, content_selector, _ = rules
+
+    # bqglll.cc 特殊处理：使用 www 版 + ?get=content 参数
+    if "bqglll.cc" in chapter_url:
+        www_url = chapter_url.replace("m.bqglll.cc", "www.bqglll.cc")
+        if "?" not in www_url:
+            www_url += "?get=content"
+        html_text = _fetch(www_url, session)
+    else:
+        html_text = _fetch(chapter_url, session)
+
     if not html_text:
         return ""
-    return _clean_chapter_content(html_text)
+    return _clean_chapter_content(html_text, content_selector=content_selector)
+
+
+def fetch_book_from_domain(title: str, author: str, domain: str) -> dict | None:
+    """在指定域名上搜索书籍，返回书籍信息或 None.
+
+    尝试通过搜索或首页发现有匹配标题+作者的书籍。
+
+    Args:
+        title: 书名
+        author: 作者名
+        domain: 目标域名（如 'biquge.com.cn'）
+
+    Returns:
+        {"title": str, "author": str, "url": str} 或 None
+    """
+    if domain not in SITE_RULES:
+        print(f"[ERROR] 不支持的域名: {domain}")
+        print(f"  支持的域名: {', '.join(list_supported_domains())}")
+        return None
+
+    session = _get_session()
+
+    # 尝试搜索：常见搜索 URL 模式
+    search_urls = [
+        f"https://{domain}/search.html?keyword={title}",
+        f"https://www.{domain}/search.html?keyword={title}",
+        f"https://{domain}/s?q={title}",
+        f"https://www.{domain}/s?q={title}",
+        f"https://{domain}/search/?keyword={title}",
+    ]
+
+    for search_url in search_urls:
+        html_text = _fetch(search_url, session)
+        if not html_text:
+            continue
+
+        soup = BeautifulSoup(html_text, "lxml")
+        # 查找搜索结果中的书籍链接
+        for a_tag in soup.find_all("a", href=True):
+            link_title = a_tag.get_text(strip=True)
+            if title in link_title:
+                href = a_tag["href"].strip()
+                book_url = urljoin(search_url, href)
+                # 尝试找作者
+                book_author = ""
+                parent = a_tag.parent
+                if parent:
+                    span = parent.find("span")
+                    if span:
+                        book_author = span.get_text(strip=True)
+                # 作者匹配（宽松）
+                if not author or not book_author or author in book_author or book_author in author:
+                    print(f"[INFO] 在 {domain} 搜索找到: {link_title}")
+                    return {"title": link_title, "author": book_author, "url": book_url}
+        print(f"  [INFO] 搜索 {search_url} 未找到匹配结果")
+
+    # 回退：从首页找
+    print(f"  [INFO] 搜索未果，尝试从 {domain} 首页查找...")
+    books = fetch_homepage_books(limit=50, domain=domain)
+    for book in books:
+        if title in book["title"] and (not author or author in book.get("author", "")):
+            print(f"[INFO] 在 {domain} 首页找到: {book['title']}")
+            return book
+
+    print(f"[WARN] 在 {domain} 未找到匹配的书籍: {title}")
+    return None
 
 
 # ── 主流程 ───────────────────────────────────────────
