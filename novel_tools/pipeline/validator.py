@@ -130,7 +130,7 @@ _TOOL_THRESHOLDS: dict[str, dict] = {
     "readability": {"metric": "readability.flesch_zh", "op": "lt", "value": 30},
     "emotion_arc": {"metric": "variance", "op": "lt", "value": 0.1},
     "redundancy": {"metric": "total_issues", "op": "gt", "value": 5},
-    "ai_score": {"metric": "risk.score", "op": "gt", "value": 50},
+    "ai_score": {"metric": "total_score", "op": "gt", "value": 50},
 }
 
 

@@ -245,17 +245,14 @@ def fetch_category_books(category: str, page: int = 1, limit: int = 10) -> list[
     """从分类页面抓取书籍列表.
 
     Args:
-        category: 分类标识，可以是中文名（如"玄幻"）或英文 slug（如"xuanhuan"）
+        category: 分类标识，中文名或英文 slug
         page: 页码（从 1 开始）
         limit: 最大返回数量
 
     Returns:
         [{"title": str, "author": str, "url": str, "category": str}, ...]
     """
-    # 解析 category 名称：支持中文名或英文 slug
     slug = CATEGORIES.get(category, category)
-
-    # 验证 slug 有效性
     if slug not in CATEGORY_CN:
         valid = ", ".join(f"{cn}({en})" for cn, en in CATEGORIES.items())
         print(f"[ERROR] 未知分类: {category}，可用: {valid}")
@@ -269,48 +266,38 @@ def fetch_category_books(category: str, page: int = 1, limit: int = 10) -> list[
     session = _get_session()
     html_text = _fetch(url, session)
     if not html_text:
+        # fallback to www
+        html_text = _fetch(url.replace("m.bqglll.cc", "www.bqglll.cc"), session)
+    if not html_text:
         print(f"[ERROR] 无法访问分类页面: {url}")
         return []
 
-    soup = BeautifulSoup(html_text, "lxml")
+    # 分类页用正则提取：<a href=\"/look/NNN/\">title</a>
+    book_pattern = re.compile(
+        r'<a\s+href=\"(/look/\d+/)\"[^>]*>([^<]+)</a>',
+        re.DOTALL,
+    )
+    author_pattern = re.compile(
+        r'<span[^>]*>([^<]{2,8})</span>',
+        re.DOTALL,
+    )
 
-    # 分类页书籍列表在 <div class="block"> 下的链接
-    # 结构: <a href="/look/NNN/">title</a> ... <span>author</span>
     books = []
-    for block in soup.find_all("div", class_="block"):
-        for a_tag in block.find_all("a", href=re.compile(r"^/look/\d+/")):
-            title = a_tag.get_text(strip=True)
-            if not title:
-                continue
-            path = a_tag["href"]
-            book_url = BASE_URL + path
+    seen = set()
+    matches = list(book_pattern.finditer(html_text))
+    authors = author_pattern.findall(html_text)
 
-            # 尝试在同级或父级找作者 span
-            author = ""
-            parent = a_tag.parent
-            if parent:
-                span = parent.find("span")
-                if span:
-                    author = span.get_text(strip=True)
-            if not author:
-                # 在附近文本中搜索作者
-                next_text = a_tag.next_sibling
-                if next_text:
-                    author = str(next_text).strip()
-
-            # 去除纯数字/标签噪声
-            if author and (author.isdigit() or len(author) < 2):
-                author = ""
-
-            if not any(b["url"] == book_url for b in books):
-                books.append({
-                    "title": title,
-                    "author": author,
-                    "url": book_url,
-                    "category": cn_name,
-                })
-            if len(books) >= limit:
-                break
+    for i, match in enumerate(matches):
+        path = match.group(1)
+        title = match.group(2).strip()
+        if len(title) < 2:
+            continue
+        book_url = BASE_URL + path
+        if book_url in seen:
+            continue
+        seen.add(book_url)
+        author = authors[i] if i < len(authors) else ""
+        books.append({"title": title, "author": author, "url": book_url, "category": cn_name})
         if len(books) >= limit:
             break
 

@@ -67,3 +67,4 @@
 - **指标路径对齐是关键坑**: `analyzer.py` 统一调用各模块，但各模块输出结构不统一（有些扁平、有些嵌套），validator 的 `_tool_normal_metrics_for_dimension` 必须用 dotted-path 解析 `readability.flesch_zh` 这类嵌套路径
 - **add_manual_reviews 接受多行字符串**（每行一条评论），不接受 list — 避免 DB 主键冲突
 - **pacing 的输出 key 是 `action_density`** 而非 `density` — 设计文档中的阈值定义需要与实际输出对齐
+- **阈值量纲要匹配**: `action_density` 是「每 1000 字符中的动作元素数量」(范围 ~10-50)，不是 0-1 的比例。正确的阈值是 **15**（<15 = 节奏慢），而非最初错误设置的 **0.4**。此 bug 导致 validator 将 pacing 正常的章节误判为 false_negative。
