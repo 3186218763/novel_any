@@ -1,76 +1,80 @@
-# bqglll.cc 抓取技术参考
+# biquge 站点抓取技术
 
-> 日期: 2026-05-26
-> 版本: v0.3.0 pipeline scraper
+bqglll.cc 及同类笔趣阁镜像的抓取方法、反爬应对和架构决策。
 
-## URL 策略
+## bqglll.cc 反爬模式
 
-| 页面类型 | 域名 | 备注 |
-|---------|------|------|
-| 首页 / 排行榜 | `m.bqglll.cc` 可用, `www` 也可用 | 两者都返回完整 HTML |
-| 书籍信息页 + 章节列表 | **必须 `www`** | 移动版章节列表被 JS 渲染 |
-| 章节内容页 | **必须 `www` + `?get=content`** | 否则返回 "加载中……" (1731 bytes) |
+### 移动端 vs 桌面端
 
-## 章节列表提取
+- **移动端** (`m.bqglll.cc`): 章节页被 Cloudflare JS Challenge 拦截，返回 1731 字节 "加载中……" 页面
+- **桌面端** (`www.bqglll.cc`): 书页可正常访问(~455KB)，包含完整章节列表
+- **章节列表格式**: `<div class="listmain"> > <dl> > <dd><a href ="/look/NNN/MMMM.html">标题</a></dd>`
+  - `href` 后可能有空格: `href ="/look/..."`
+  - 正则: `r'<dd>\s*<a\s+href\s*=\s*"((?:/look/\d+/)?(\d+)\.html)"\s*>\s*([^<]+?)\s*</a>\s*</dd>'`
 
-www 版书籍页 (`/look/{book_id}/`) 的章节在 `<div class="listmain"> > <dl> > <dd>` 中：
+### ?get=content 参数
 
-```html
-<div class="listmain">
-    <dl>
-        <dt>九星霸体诀最新章节列表</dt>
-        <dd><a href ="/look/9260/1.html">感谢大家的关心</a></dd>
-        <dd><a href ="/look/9260/2.html">第一章 田园惊变</a></dd>
-        ...
-    </dl>
-</div>
+桌面版章节页默认也返回 "加载中……"。追加 URL 参数 `?get=content` 触发服务端渲染：
+
+```
+https://www.bqglll.cc/look/9260/2.html?get=content
 ```
 
-正则模式（注意 `href` 后可能有空格）：
+返回内容在 `id="chaptercontent"` div 中。
+
+**限制**: 返回的是预览片段(~1079 个中文字符)，非完整章节。所有参数变体(?get=full, ?page=all, ?v=2, ?format=txt)返回长度一致。
+
+### 首页书籍发现
+
+首页用正则提取:
 ```python
-chapter_pattern = re.compile(
-    r'<dd>\s*<a\s+href\s*=\s*"((?:/look/\d+/)?(\d+)\.html)"\s*>\s*([^<]+?)\s*</a>\s*</dd>',
-    re.DOTALL,
-)
+r'<a href="(/look/\d+/)"[^>]*>([^<]+)</a>.*?<span[^>]*>([^<]+)</span>'
 ```
 
-按 `chapter_no` 去重并排序。最多取 `max_chapters` 章。
+### 分类页
 
-## 章节内容提取
-
-www 版章节页 (`/look/{book_id}/{ch_no}.html`) 默认返回 JS 加载骨架（1731 bytes，"加载中……"）。追加 `?get=content` 触发服务端渲染完整内容：
-
-```
-https://www.bqglll.cc/look/9260/2.html?get=content  → 7248+ bytes, 含真实正文
+移动版分类页(`/xuanhuan/`、`/dushi/` 等)可用:
+```python
+r'<a\s+href="(/look/\d+/)"[^>]*>([^<]+)</a>'
 ```
 
-正文在 `<div id="chaptercontent">` 中。其他可能的容器 ID（按优先级）：`chaptercontent`, `content`, `txt`, `article`, `nr1`。
+**不要用 BeautifulSoup 选择器** (`div.block`、`soup.find_all` 等) — 移动版 DOM 结构与桌面版不同。
 
-## 绕过 Cloudflare
+## 镜像站生态
 
-- 移动端 (`m.bqglll.cc`) 章节页被 Cloudflare JS Challenge 完全拦截，即使 `cloudscraper` 和 `curl_cffi` 也无法绕过
-- 桌面版 (`www.bqglll.cc`) 可通过 `cloudscraper` + `?get=content` 正常获取内容
-- `cloudscraper` 配置：`browser={'browser':'chrome','platform':'windows','mobile':False}`
-- 备用 `requests.Session` 需要设置移动端 User-Agent（Android Chrome）
+从 owllook 项目移植的 9 域名规则引擎（`pipeline/scraper_rules.py`）：
 
-## 内容清洗
+| 域名 | 状态 | 说明 |
+|------|------|------|
+| bqglll.cc | ✅ 可用 | ?get=content 预览片段 |
+| biquge.com.cn | ❌ SSL 错误 | 证书不匹配 |
+| biquge.info | ❌ Cloudflare | EOF SSL |
+| biqukan.com | ❌ 403 | 直接禁止 |
+| bqg5200.com | ❌ Cloudflare | EOF SSL |
+| 23qb.com | ❌ Cloudflare | 403 |
+| biqudu.com | ❌ Cloudflare | EOF SSL |
+| biquge.tv | ❌ 空页面 | 无书籍链接 |
+| xbiquge.la | ❌ Cloudflare | EOF SSL |
 
-BeautifulSoup + lxml 解析。清洗步骤：
-1. 移除 `<script>`, `<style>`, `<noscript>`, `<iframe>` 标签
-2. 从已知容器 ID 提取正文（`chaptercontent` 优先）
-3. 解码 HTML 实体（`html.unescape`）
-4. 移除导航/广告文本（正则匹配 "请记住本书首发域名…"、"笔趣阁…"、"一秒记住…" 等）
-5. 压缩多余空行
+**结论**: 所有镜像站要么被 Cloudflare 保护，要么只返回预览片段。获取完整章节需用 headless browser (playwright/selenium) 或付费源。
 
-## 速率限制
+## 排行榜陷阱
 
-- 章节间间隔：0.3 秒
-- 失败后间隔：0.5 秒
-- 单书连续 5 章失败 → 跳过该书剩余章节
-- 0 章下载 → 标记书籍为 `deprecated`
+bqglll.cc `/top/` 排行榜前列返回成人向内容。数据采集优先用:
+1. 首页推荐 (内容质量相对高)
+2. 分类页 (可按类型筛选)
+3. 排行榜 (仅作补充，需过滤)
 
-## 已知限制
+## 章节内容清洗
 
-- `?get=content` 返回的内容有时是预览/摘录（~1079 字），非完整章节
-- 作者名在首页推荐列表中可能与实际不一致（如"九星霸体诀"作者显示为"唐家三少"而非"平凡魔术师"）
-- 分类提取不完整（首页不区分玄幻/仙侠等子类）
+```python
+CONTENT_IDS = ["chaptercontent", "content", "txt", "article", "nr1"]
+NAV_PATTERNS = [
+    r"请记住本书首发域名.*?，最快更新",
+    r"手机版阅读地址.*?",
+    r"最快更新.*?最新章节！",
+    r"笔趣阁.*?最快更新.*?无广告！",
+    r"一秒记住.*?：.*?。",
+    r"天才一秒记住.*?。",
+]
+```

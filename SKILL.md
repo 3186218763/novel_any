@@ -5,7 +5,7 @@ description: |
   覆盖大纲构思→写作执行→精修审查全流程。6 个专业 Agent 协作，
   作者主导、AI 协力的协作模式。
   触发方式：「写小说」「帮我写书」「开新书」「继续写」「审稿」
-version: 1.1.0
+version: 1.2.0
 ---
 
 # novel_any — AI 人机协作小说写作系统
@@ -196,6 +196,8 @@ delegate_task(
 > 豆瓣评论抓取：`references/douban-scraping.md`
 > GitHub 爬虫项目调研：`references/github-scraper-research.md`
 > Pipeline 使用：`references/pipeline-usage.md`
+> Playwright WSL 安装：`references/playwright-wsl-setup.md`
+> trxs.cc Playwright 抓取：`references/trxs-scraping.md`
 > **验证报告**: 项目目录下 `docs/superpowers/specs/2026-05-26-novel-tools-validation-report.md`
 > **验证模式**: `references/tool-validation-pattern.md`
 
@@ -213,9 +215,9 @@ v0.1.0 已有 5 个模块的完整实现。v0.2.0 渐进增强 + 新增 style_li
 
 ### pipeline 快速使用
 
-```bash
-# 全流程
-python -m novel_tools.pipeline.pipeline run --limit 3 --max-chapters 10
+version: 1.2.0
+---
+python -m novel_tools.pipeline.pipeline run --limit 5 --max-chapters 30
 
 # 单独阶段
 python -m novel_tools.pipeline.pipeline fetch --limit 5
@@ -271,6 +273,20 @@ pipeline 抓取15本书 → 分析 → 豆瓣评论验证 → 发现 gap → 修
 
 依赖：jieba（必选），SnowNLP/pypinyin/NetworkX（可选）
 数据文件：`hanzi_strokes.json` 从 Unicode Unihan 生成 → `references/hanzi-stroke-generation.md`
+
+### 工具验证闭环
+
+验证 novel_tools 准确性的迭代流程（详见 `references/tool-validation-pattern.md`）：
+
+```
+抓取 → 分析 → 评论验证 → 发现 gap → 修工具 → 重跑 → 迭代至平台期
+```
+
+**v0.3.0 实测**：13本书 512章 31条评论，从 matched=3.8% 迭代 4 轮至 61.6%。剩余 gap 根因为章节预览片段(~1000字)不足以触发深层检测。突破需完整章节(3000+字)。
+
+**短文本补偿**：
+- style_lint 追加 `quick_scan()` — 副词密度/句首重复/感叹号密度/叠词/"了"字密度
+- emotion 对 <2000 字文本做方差归一化(× total_chars/2000)
 
 ---
 

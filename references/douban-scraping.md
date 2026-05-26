@@ -1,68 +1,52 @@
-# 豆瓣评论抓取技术参考
+# 豆瓣评论抓取
 
-> 日期: 2026-05-26
-> 模块: novel_tools.pipeline.review_scraper
+从豆瓣抓取书籍短评用于 novel_tools 验证。
 
 ## 代理要求
 
-豆瓣在国内网络环境中 DNS 被污染，直接访问会 SSL 错误。必须通过代理：
+国内访问豆瓣需代理。review_scraper 通过 `_get_session()` 自动读取环境变量：
 
 ```python
-import os
 os.environ['HTTP_PROXY'] = 'http://127.0.0.1:10090'
 os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:10090'
 ```
 
-`_get_session()` 会自动读取环境变量并设置 `session.proxies`。
+不设置代理 → SSL EOF 错误。
 
-## 搜索与 Subject ID 提取
+## 搜索流程
 
-豆瓣搜索结果不再直接暴露 `subject/{id}/` 链接。当前页面通过 `/link2/?url=...` 跳转，subject ID 被 URL-encoded：
+1. 搜索书籍: `https://www.douban.com/search?cat=1001&q={书名}`
+2. 提取 subject ID: 豆瓣新搜索结果将链接编码在 `/link2/?url=...` 中
+   - 正则: `r'/link2/\?url=.*?subject%2F(\d+)%2F'`
+   - 回退(旧版): `r'subject/(\d+)/'`
+3. 抓评论: `https://book.douban.com/subject/{id}/comments/`
 
-```html
-<a href="/link2/?url=https%3A%2F%2Fbook.douban.com%2Fsubject%2F3705820%2F&query=...">
-```
-
-提取正则（优先匹配 URL-encoded 格式，回退到明文）：
-
-```python
-subject_match = re.search(r'/link2/\?url=.*?subject%2F(\d+)%2F', html_text)
-if not subject_match:
-    subject_match = re.search(r'subject/(\d+)/', html_text)
-```
-
-## 评论抓取
-
-获取 subject ID 后，评论页 URL: `https://book.douban.com/subject/{subject_id}/comments/`
-
-评论内容在 `<span class="short">` 中，评分在 `class="allstar{N}"` 中（N 范围 10-50，除以 10 得 1-5 星）：
+## 评论提取
 
 ```python
 comment_pattern = re.compile(r'<span class="short">(.*?)</span>', re.DOTALL)
 rating_pattern = re.compile(r'class="allstar(\d+)', re.DOTALL)
+# rating = int(rating) // 10 → 0-5 星
 ```
 
-## 测试结果
+## 书名清洗
 
-测试书名「斗罗大陆」搜索提取 `subject_id=3705820`，成功抓取 17 条短评。
-
-## Session 配置
+网文标题常有噪音后缀，搜索前需清洗：
 
 ```python
-session.headers.update({
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0",
-    "Accept": "text/html,application/json",
-    "Accept-Language": "zh-CN,zh;q=0.9",
-})
-# 代理自动从 HTTP_PROXY/HTTPS_PROXY 环境变量读取
-for proto in ("HTTP", "HTTPS"):
-    proxy = os.environ.get(f"{proto}_PROXY")
-    if proxy:
-        session.proxies[proto.lower()] = proxy
+def _clean_book_title(title: str) -> str:
+    suffixes = ['完结时间', '什么软件能看', '全文免费阅读', '免费阅读',
+                '全文阅读', '无弹窗', '笔趣阁', 'txt下载', '精校版']
+    for s in suffixes:
+        title = title.replace(s, '')
+    title = re.sub(r'[（(][^)）]*[)）]', '', title)
+    return title.strip()
 ```
 
-## 限制
+示例:
+- `开局签到荒古圣体什么软件能看` → `开局签到荒古圣体`
+- `超级上门女婿完结时间` → `超级上门女婿`
 
-- 豆瓣可能对高频请求封 IP，建议间隔 1 秒以上
-- 网络小说在豆瓣的评论数量和质量参差不齐
-- 豆瓣搜索可能返回同名但不同媒介的书籍（如实体书 vs 网络版），需仔细匹配
+## 覆盖率
+
+豆瓣对网文书名匹配率约 38%(5/13 本)。长书名、带符号书名更难匹配。建议补充贴吧抓取（代码已有，默认启用）。

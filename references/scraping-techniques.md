@@ -88,6 +88,16 @@ export HTTP_PROXY=http://127.0.0.1:10090
 
 ## 已知局限
 
-- bqglll.cc 章节内容仅为预览片段（~1079 字），非完整章节
+- bqglll.cc 章节内容仅为预览片段（~1079 字），非完整章节。所有 biquge 系镜像站（测试 12+ 个域名）统一返回截断内容，此为行业通用反爬模式
 - 豆瓣对网文书名匹配率低（长书名、带符号的难匹配）
 - 百度贴吧需 JS 渲染，requests 获取不完整
+
+## Playwright 尝试（未成功）
+
+为获取完整章节，尝试了 Playwright headless 浏览器方案：
+
+1. **trxs.cc** — 章节 17442 字（完整），但书单页使用 JS 渲染，curl/cloudscraper 无法遍历。Playwright 可渲染但环境缺 `libnspr4.so` 无 sudo 无法安装 Chromium 系统依赖。
+2. **chromium 下载成功**（382MB，`~/.cache/ms-playwright/chromium-1223/`），但二进制启动失败（libnspr4.so 缺失）。`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` 环境变量在 playwright 1.60 中无法覆盖 headless_shell 路径。
+3. **WSL 无 root**：`apt install chromium-browser` 需要 sudo，`playwright install-deps` 同理。
+
+**结论**：WSL 无 sudo 环境下 Playwright/Selenium 不可行。替代方案需 Docker 容器或使用 API 驱动的 headless 服务。
