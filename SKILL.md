@@ -192,13 +192,15 @@ delegate_task(
 > v2 实现计划：项目目录下 `docs/plans/2026-05-26-novel-tools-v2-plan.md`  
 > pipeline 设计：项目目录下 `docs/superpowers/specs/2026-05-26-novel-auto-pipeline-design.md`  
 > pipeline 实现计划：项目目录下 `docs/plans/2026-05-26-novel-auto-pipeline-plan.md`  
-> 抓取技术参考：`references/biquge-scraping.md`
-> 豆瓣评论抓取：`references/douban-scraping.md`
-> GitHub 爬虫项目调研：`references/github-scraper-research.md`
-> Pipeline 使用：`references/pipeline-usage.md`
-> Playwright WSL 安装：`references/playwright-wsl-setup.md`
-> trxs.cc Playwright 抓取：`references/trxs-scraping.md`
-> **验证报告**: 项目目录下 `docs/superpowers/specs/2026-05-26-novel-tools-validation-report.md`
+> 抓取技术参考：`references/biquge-scraping.md`  
+> 豆瓣评论抓取：`references/douban-scraping.md`  
+> **盗版站局限**: `references/biquge-limitations.md`  
+> **阈值校准记录**: `references/threshold-calibration.md`  
+> GitHub 爬虫项目调研：`references/github-scraper-research.md`  
+> Pipeline 使用：`references/pipeline-usage.md`  
+> Playwright WSL 安装：`references/playwright-wsl-setup.md`  
+> trxs.cc Playwright 抓取：`references/trxs-scraping.md`  
+> **验证报告**: `docs/superpowers/specs/2026-05-26-novel-tools-validation-report.md`  
 > **验证模式**: `references/tool-validation-pattern.md`
 
 v0.1.0 已有 5 个模块的完整实现。v0.2.0 渐进增强 + 新增 style_lint。v0.3.0 新增 pipeline 流水线子系统。
@@ -230,11 +232,14 @@ python -m novel_tools.pipeline.pipeline review
 ```
 
 **pipeline 核心机制：**
-1. 从 www.bqglll.cc 抓取免费章节（使用 `?get=content` 参数绕过 Cloudflare）
-2. 运行全部 6 个分析模块生成指标 JSON，存入 `pipeline.db`
-3. 将读者评论与工具输出按维度对比，发现 false_negative / false_positive
-4. 对差距通过 `delegate_task` 委派 subagent 调研和改进
-5. 改进后运行导入检查回归验证
+1. **抓取**：bqglll.cc（cloudscraper + `?get=content`，~1000 字预览）或 trxs.cc（Playwright headless，2300-4400 完整章节）
+2. **分析**：运行全部 6 模块 + cross_chapter 生成指标 JSON，存入 `pipeline.db`
+3. **验证**：豆瓣短评抓取（需代理）→ 维度映射 → 与工具输出对比 → 发现 gap
+4. **改进**：对 gap 通过 `delegate_task` 委派 subagent 调研和改进
+5. **审查**：改进后运行导入检查 + 回归验证
+6. **循环**：matched rate 从 3.8% 迭代到 61.6%（14 commits）
+
+**阈值已校准**（见 `references/threshold-calibration.md`），pacing/readability 通过验证 (0 gaps)。
 
 **抓取注意事项：** 移动端 (`m.bqglll.cc`) 章节页被 Cloudflare JS Challenge 拦截，必须使用桌面版 (`www.bqglll.cc`) + URL 追加 `?get=content` 触发服务端渲染。章节列表在 `<div class="listmain"> > <dl> > <dd>` 结构中，`href` 后可能有空格。详见 `references/biquge-scraping.md`。
 
