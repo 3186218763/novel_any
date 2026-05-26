@@ -1,4 +1,6 @@
-"""pipeline.scraper — bqglll.cc 小说抓取工具.
+"""pipeline.scraper — 多站点小说抓取工具.
+
+支持 biquge 系列镜像站，通过 scraper_rules 规则引擎适配不同站点。
 
 pip install cloudscraper beautifulsoup4 -q
 """
@@ -7,14 +9,29 @@ import html
 import re
 import time
 from pathlib import Path
+from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
 from . import db
+from .scraper_rules import get_rules_for_url, list_supported_domains
 
 BASE_URL = "https://m.bqglll.cc"
 WWW_URL = "https://www.bqglll.cc"
+
+DEFAULT_DOMAIN = "bqglll.cc"
+
+CATEGORIES: dict[str, str] = {
+    "玄幻": "xuanhuan",
+    "武侠": "wuxia",
+    "都市": "dushi",
+    "历史": "lishi",
+    "网游": "wangyou",
+    "科幻": "kehuan",
+    "女生": "mm",
+}
+CATEGORY_CN: dict[str, str] = {v: k for k, v in CATEGORIES.items()}
 
 # 数据目录 — db.py 的 PIPELINE_DIR 是 .../novel_any/data/pipeline
 PIPELINE_DIR = Path(__file__).parent.parent.parent / "data" / "pipeline"
@@ -126,6 +143,10 @@ def fetch_homepage_books(limit: int = 10) -> list[dict]:
     session = _get_session()
     html_text = _fetch(BASE_URL, session)
     if not html_text:
+        # 尝试桌面版作为回退
+        print("[INFO] 移动版首页不可用，尝试桌面版...")
+        html_text = _fetch(WWW_URL, session)
+    if not html_text:
         print("[ERROR] 无法访问首页")
         return []
 
@@ -147,6 +168,149 @@ def fetch_homepage_books(limit: int = 10) -> list[dict]:
             break
 
     print(f"[INFO] 从首页发现 {len(books)} 本书")
+    return books
+
+
+def fetch_category_books(category: str, page: int = 1, limit: int = 10) -> list[dict]:
+    """从分类页面抓取书籍列表.
+
+    Args:
+        category: 分类标识，可以是中文名（如"玄幻"）或英文 slug（如"xuanhuan"）
+        page: 页码（从 1 开始）
+        limit: 最大返回数量
+
+    Returns:
+        [{"title": str, "author": str, "url": str, "category": str}, ...]
+    """
+    # 解析 category 名称：支持中文名或英文 slug
+    slug = CATEGORIES.get(category, category)
+
+    # 验证 slug 有效性
+    if slug not in CATEGORY_CN:
+        valid = ", ".join(f"{cn}({en})" for cn, en in CATEGORIES.items())
+        print(f"[ERROR] 未知分类: {category}，可用: {valid}")
+        return []
+
+    cn_name = CATEGORY_CN[slug]
+    url = f"{BASE_URL}/{slug}/"
+    if page > 1:
+        url = f"{BASE_URL}/{slug}/{page}.html"
+
+    session = _get_session()
+    html_text = _fetch(url, session)
+    if not html_text:
+        print(f"[ERROR] 无法访问分类页面: {url}")
+        return []
+
+    soup = BeautifulSoup(html_text, "lxml")
+
+    # 分类页书籍列表在 <div class="block"> 下的链接
+    # 结构: <a href="/look/NNN/">title</a> ... <span>author</span>
+    books = []
+    for block in soup.find_all("div", class_="block"):
+        for a_tag in block.find_all("a", href=re.compile(r"^/look/\d+/")):
+            title = a_tag.get_text(strip=True)
+            if not title:
+                continue
+            path = a_tag["href"]
+            book_url = BASE_URL + path
+
+            # 尝试在同级或父级找作者 span
+            author = ""
+            parent = a_tag.parent
+            if parent:
+                span = parent.find("span")
+                if span:
+                    author = span.get_text(strip=True)
+            if not author:
+                # 在附近文本中搜索作者
+                next_text = a_tag.next_sibling
+                if next_text:
+                    author = str(next_text).strip()
+
+            # 去除纯数字/标签噪声
+            if author and (author.isdigit() or len(author) < 2):
+                author = ""
+
+            if not any(b["url"] == book_url for b in books):
+                books.append({
+                    "title": title,
+                    "author": author,
+                    "url": book_url,
+                    "category": cn_name,
+                })
+            if len(books) >= limit:
+                break
+        if len(books) >= limit:
+            break
+
+    print(f"[INFO] 从分类「{cn_name}」第 {page} 页发现 {len(books)} 本书")
+    return books
+
+
+def fetch_ranking_books(page: int = 1, limit: int = 10) -> list[dict]:
+    """从排行榜页面抓取书籍列表.
+
+    Args:
+        page: 页码（从 1 开始）
+        limit: 最大返回数量
+
+    Returns:
+        [{"title": str, "author": str, "url": str, "rank": int}, ...]
+    """
+    url = f"{BASE_URL}/top/"
+    if page > 1:
+        url = f"{BASE_URL}/top/{page}.html"
+
+    session = _get_session()
+    html_text = _fetch(url, session)
+    if not html_text:
+        # 尝试 www 版
+        www_top = f"{WWW_URL}/top/"
+        if page > 1:
+            www_top = f"{WWW_URL}/top/{page}.html"
+        print("[INFO] 移动版排行不可用，尝试桌面版...")
+        html_text = _fetch(www_top, session)
+    if not html_text:
+        print("[ERROR] 无法访问排行榜页面")
+        return []
+
+    soup = BeautifulSoup(html_text, "lxml")
+
+    # 排行页结构：<div class="block"> 内含排行列表
+    # 每项可能是 <a href="/look/NNN/">title</a> + <span>author</span>
+    books = []
+    rank = (page - 1) * 20  # 估算排名起始位置
+
+    for block in soup.find_all("div", class_="block"):
+        for a_tag in block.find_all("a", href=re.compile(r"^/look/\d+/")):
+            title = a_tag.get_text(strip=True)
+            if not title:
+                continue
+            path = a_tag["href"]
+            book_url = BASE_URL + path
+
+            author = ""
+            parent = a_tag.parent
+            if parent:
+                span = parent.find("span")
+                if span:
+                    author = span.get_text(strip=True)
+
+            rank += 1
+            if not any(b["url"] == book_url for b in books):
+                books.append({
+                    "title": title,
+                    "author": author,
+                    "url": book_url,
+                    "rank": rank,
+                })
+            if len(books) >= limit:
+                break
+        if len(books) >= limit:
+            break
+
+    print(f"[INFO] 从排行榜第 {page} 页发现 {len(books)} 本书")
     return books
 
 
@@ -210,23 +374,69 @@ def fetch_chapter_content(chapter_url: str) -> str:
 
 # ── 主流程 ───────────────────────────────────────────
 
-def discover_and_fetch(limit: int = 3, max_chapters: int = 50) -> dict:
+def discover_and_fetch(
+    limit: int = 3,
+    max_chapters: int = 50,
+    discovery_mode: str = "homepage",
+) -> dict:
     """主流程：发现书籍 → 抓取章节 → 保存到 DB 和文件系统.
 
-    1. 从首页发现 `limit` 本书
+    1. 根据 discovery_mode 发现 `limit` 本书
     2. 每本书获取最多 `max_chapters` 章
     3. 章节保存到 data/pipeline/books/{book_id}/ch{no:03d}.md
     4. 0 章下载的书籍自动标记为 deprecated
+
+    Args:
+        limit: 最大发现书籍数量
+        max_chapters: 每本书最大下载章数
+        discovery_mode: 发现模式 -
+            "homepage" (默认): 从首页发现
+            "ranking": 从排行榜发现
+            "category:玄幻": 从指定分类发现（如 "category:玄幻", "category:xuanhuan"）
+            "all": 综合所有方式，去重后返回
 
     Returns:
         {"books_added": int, "chapters_downloaded": int, "errors": list}
     """
     stats: dict = {"books_added": 0, "chapters_downloaded": 0, "errors": []}
 
-    # ── 1. 发现书籍 ──
-    books = fetch_homepage_books(limit=limit)
+    # ── 1. 根据模式发现书籍 ──
+    mode = discovery_mode.strip().lower()
+    books: list[dict] = []
+    seen_urls: set[str] = set()
+
+    def _deduplicate_candidates(candidates: list[dict]) -> list[dict]:
+        """按 url 去重，保持顺序."""
+        result = []
+        for b in candidates:
+            if b["url"] not in seen_urls:
+                seen_urls.add(b["url"])
+                result.append(b)
+        return result
+
+    if mode == "ranking":
+        books = fetch_ranking_books(limit=limit)
+    elif mode.startswith("category:"):
+        cat = discovery_mode[len("category:"):].strip()
+        books = fetch_category_books(cat, limit=limit)
+    elif mode == "all":
+        # 综合所有方式
+        from_sources: list[list[dict]] = [
+            fetch_homepage_books(limit=limit),
+            fetch_ranking_books(limit=limit),
+        ]
+        for cat_slug in CATEGORIES.values():
+            from_sources.append(fetch_category_books(cat_slug, limit=max(2, limit // 2)))
+        for source_books in from_sources:
+            books.extend(_deduplicate_candidates(source_books))
+        books = books[:limit]
+        print(f"[INFO] 综合发现模式: 去重后共 {len(books)} 本书")
+    else:
+        # 默认 homepage
+        books = fetch_homepage_books(limit=limit)
+
     if not books:
-        stats["errors"].append("未发现任何书籍")
+        stats["errors"].append(f"未发现任何书籍 (模式: {mode})")
         return stats
 
     for book in books:
