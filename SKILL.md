@@ -201,7 +201,7 @@ v0.1.0 已有 5 个模块的完整实现。v0.2.0 渐进增强 + 新增 style_li
 | 模块 | 对应 Agent | 功能 | 版本 |
 |------|-----------|------|------|
 | stats | architect + narrator | 字数/进度/对话描写比例/节奏密度/情绪曲线 | v0.2.0 增强 |
-| slop | polisher | AI味检测：TTR/句长变异/黑名单/Token rank | v0.2.0 增强 |
+| slop | polisher | AI味检测：TTR/句长变异/黑名单/Token rank/短语重复检测 | v0.3.0 增强 |
 | bible | character + consistency | 角色/世界观/伏笔 SQLite CRUD | v0.2.0 增强 |
 | consistency | consistency-checker | 多模型情感曲线/跨章时间线/拼音模糊匹配 | v0.2.0 增强 |
 | outline | architect | 分层大纲校验 + TextRank 摘要 vs 大纲对比 | v0.2.0 增强 |
@@ -234,8 +234,8 @@ python -m novel_tools.pipeline.pipeline review
 **抓取注意事项：** 移动端 (`m.bqglll.cc`) 章节页被 Cloudflare JS Challenge 拦截，必须使用桌面版 (`www.bqglll.cc`) + URL 追加 `?get=content` 触发服务端渲染。章节列表在 `<div class="listmain"> > <dl> > <dd>` 结构中，`href` 后可能有空格。详见 `references/biquge-scraping.md`。
 
 **验证器阈值陷阱：**
-- `pacing.action_density` 是「每千字动作元素数」（值域 ~10-50），NOT 0-1 比例。阈值应设为 15（低于 15 = 节奏慢），而非 0.4。
-- `ai_score.total_score` 在分析输出的顶层，不在嵌套对象中。不要用 `risk.score`（该字段为空）。
+- `pacing.action_density` 是「每千字动作元素数」（值域 ~10-50），NOT 0-1 比例。阈值应设为 15（低于 15 = 节奏慢），而非 0.4。建议同时检查 `narration_ratio > 0.75` 作为「水文」的补充信号——叙述占比过高也是一种节奏慢。
+- `ai_score.total_score` 在分析输出的顶层，不在嵌套对象中。不要用 `risk.score`（该字段为空）。v0.3.0 新增了 `phrase_repetition_score`（短语重复检测，如"惊才绝艳"用了 N 次），融入 total_score 加权（权重 0.15）。阈值建议 20（高于 20 = AI 味重）。
 - `style_lint` 的分析输出使用 `total_issues` 字段（非 `redundancy_count`）。
 
 **分类页抓取：** bqglll.cc 移动版分类页（`/xuanhuan/` 等）可用 `<a href="/look/NNN/">` 正则提取，BeautifulSoup 的 `div.block` 选择器不匹配移动版结构。

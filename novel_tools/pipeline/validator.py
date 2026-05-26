@@ -128,8 +128,8 @@ DIMENSION_MODULE: dict[str, str] = {
 _TOOL_THRESHOLDS: dict[str, dict] = {
     "pacing": {"metric": "action_density", "op": "lt", "value": 15},
     "readability": {"metric": "readability.flesch_zh", "op": "lt", "value": 30},
-    "emotion_arc": {"metric": "variance", "op": "lt", "value": 0.1},
-    "redundancy": {"metric": "total_issues", "op": "gt", "value": 5},
+    "emotion_arc": {"metric": "avg_intensity", "op": "lt", "value": 0.3},
+    "redundancy": {"metric": "summary.total", "op": "gt", "value": 5},
     "ai_score": {"metric": "total_score", "op": "gt", "value": 20},
 }
 
