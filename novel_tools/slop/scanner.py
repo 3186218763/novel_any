@@ -179,6 +179,6 @@ def scan_chinese_weasel(text: str) -> dict:
         results[cat] = deduped
 
     return {
-        "total_hits": total,
+        "total_hits": sum(len(v) for v in results.values()),
         "by_category": results,
     }

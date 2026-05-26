@@ -31,22 +31,18 @@ def register(project_dir: str, name: str, role: str = "supporting",
 def update(project_dir: str, char_id: str, **kwargs) -> dict | None:
     """更新角色信息."""
     from novel_tools.bible.model import bible_session
-    with bible_session(project_dir) as db:
-        pass  # placeholder — restructured below
     allowed = {"name", "role", "aliases", "profile", "speech_style", "status"}
     updates = {}
     for k, v in kwargs.items():
         if k in allowed:
             updates[k] = json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
     if not updates:
-        db.close()
         return None
-    set_clause = ", ".join(f"{k}=?" for k in updates)
-    values = list(updates.values()) + [char_id]
-    db.execute(f"UPDATE characters SET {set_clause} WHERE id=?", values)
-    db.commit()
-    char = row_to_dict(db.execute("SELECT * FROM characters WHERE id=?", (char_id,)).fetchone())
-    db.close()
+    with bible_session(project_dir) as db:
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        values = list(updates.values()) + [char_id]
+        db.execute(f"UPDATE characters SET {set_clause} WHERE id=?", values)
+        char = row_to_dict(db.execute("SELECT * FROM characters WHERE id=?", (char_id,)).fetchone())
     return char
 
 

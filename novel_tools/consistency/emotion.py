@@ -90,11 +90,15 @@ def extract_emotion_curve(filepath: str, segments: int = 40,
         except ImportError:
             pass
 
-        if weights.get("hf", 0) == 0:
-            total_w = weights["dict"] + weights["snownlp"]
-            combined = dict_norm * (weights["dict"] / total_w) + snownlp_norm * (weights["snownlp"] / total_w) if total_w > 0 else dict_norm
+        # No HF model available; redistribute hf weight proportionally
+        d_w = weights["dict"]
+        s_w = weights["snownlp"]
+        h_w = weights.get("hf", 0)
+        total_w = d_w + s_w + h_w
+        if total_w > 0:
+            combined = dict_norm * (d_w + h_w) / total_w + snownlp_norm * s_w / total_w
         else:
-            combined = dict_norm * weights["dict"] + snownlp_norm * weights["snownlp"]
+            combined = dict_norm
 
         curve.append({
             "position": round(pos / total_chars, 3),
