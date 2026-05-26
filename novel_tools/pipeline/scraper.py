@@ -387,24 +387,53 @@ def fetch_ranking_books(page: int = 1, limit: int = 10) -> list[dict]:
 def fetch_book_chapters(book_url: str, max_chapters: int = 50) -> list[dict]:
     """从书籍目录页获取章节列表.
 
-    使用规则引擎适配不同站点。若站点不支持则回退到 bqglll.cc 的 regex 方式。
+    对 bqglll.cc 使用 www 版 + regex（已验证可用），其他站点走规则引擎。
 
     Returns:
         [{"chapter_no": int, "title": str, "url": str}, ...]
     """
     session = _get_session()
+
+    # ── bqglll.cc 专用：www 版 + regex（已验证，最可靠）──
+    if "bqglll.cc" in book_url:
+        www_url = book_url.replace("m.bqglll.cc", "www.bqglll.cc")
+        html_text = _fetch(www_url, session)
+        if not html_text:
+            print(f"[ERROR] 无法访问书籍页面: {www_url}")
+            return []
+
+        chapter_pattern = re.compile(
+            r'<dd>\s*<a\s+href\s*=\s*"((?:/look/\d+/)?(\d+)\.html)"\s*>\s*([^<]+?)\s*</a>\s*</dd>',
+            re.DOTALL,
+        )
+        chapters = []
+        seen_nums = set()
+        for match in chapter_pattern.finditer(html_text):
+            path = match.group(1)
+            chapter_no = int(match.group(2))
+            title = match.group(3).strip()
+            if chapter_no in seen_nums:
+                continue
+            seen_nums.add(chapter_no)
+            if not path.startswith("/look/"):
+                book_id_match = re.search(r"/look/(\d+)/", www_url)
+                if book_id_match:
+                    path = f"/look/{book_id_match.group(1)}/{path}"
+            url = WWW_URL + path
+            chapters.append({"chapter_no": chapter_no, "title": title, "url": url})
+
+        chapters.sort(key=lambda c: c["chapter_no"])
+        chapters = chapters[:max_chapters]
+        print(f"[INFO] 从 {www_url} 发现 {len(chapters)} 章 (bqglll.cc regex)")
+        return chapters
+
+    # ── 其他站点：规则引擎路径 ──
     rules = get_rules_for_url(book_url)
-
-    # 提取 base URL 用于拼接相对路径
-    parsed = urlparse(book_url)
-    base_domain = f"{parsed.scheme}://{parsed.netloc}"
-
     html_text = _fetch(book_url, session)
     if not html_text:
         print(f"[ERROR] 无法访问书籍页面: {book_url}")
         return []
 
-    # ── 规则引擎路径：使用 BeautifulSoup + 选择器 ──
     if rules:
         ch_sel, _, _ = rules
         soup = BeautifulSoup(html_text, "lxml")
@@ -413,18 +442,15 @@ def fetch_book_chapters(book_url: str, max_chapters: int = 50) -> list[dict]:
         seen: set[str] = set()
 
         if container:
-            # 查找容器内所有 <a> 链接（通常在 <dd><a> 中）
             for a_tag in container.find_all("a", href=True):
                 href = a_tag["href"].strip()
                 title = a_tag.get_text(strip=True)
                 if not title or not href or href == "#":
                     continue
-                # 跳过明显的非章节链接（如分页、首页等）
                 skip_texts = ("首页", "上一页", "下一页", "末页", "返回", "目录",
                               "next", "prev", "home", ">>", "<<")
                 if any(s in title for s in skip_texts):
                     continue
-                # 解析完整 URL
                 chapter_url = urljoin(book_url, href)
                 if chapter_url in seen:
                     continue
@@ -440,40 +466,8 @@ def fetch_book_chapters(book_url: str, max_chapters: int = 50) -> list[dict]:
         print(f"[INFO] 从 {book_url} 发现 {len(chapters)} 章 (规则引擎)")
         return chapters
 
-    # ── 回退：bqglll.cc 专用 regex ──
-    www_url = book_url.replace("m.bqglll.cc", "www.bqglll.cc")
-    if www_url != book_url:
-        html_text = _fetch(www_url, session)
-        if not html_text:
-            print(f"[ERROR] 无法访问书籍页面: {www_url}")
-            return []
-        book_url = www_url
-
-    chapter_pattern = re.compile(
-        r'<dd>\s*<a\s+href\s*=\s*"((?:/look/\d+/)?(\d+)\.html)"\s*>\s*([^<]+?)\s*</a>\s*</dd>',
-        re.DOTALL,
-    )
-
-    chapters = []
-    seen_nums = set()
-    for match in chapter_pattern.finditer(html_text):
-        path = match.group(1)
-        chapter_no = int(match.group(2))
-        title = match.group(3).strip()
-        if chapter_no in seen_nums:
-            continue
-        seen_nums.add(chapter_no)
-        if not path.startswith("/look/"):
-            book_id_match = re.search(r"/look/(\d+)/", book_url)
-            if book_id_match:
-                path = f"/look/{book_id_match.group(1)}/{path}"
-        url = WWW_URL + path
-        chapters.append({"chapter_no": chapter_no, "title": title, "url": url})
-
-    chapters.sort(key=lambda c: c["chapter_no"])
-    chapters = chapters[:max_chapters]
-    print(f"[INFO] 从 {book_url} 发现 {len(chapters)} 章 (regex 回退)")
-    return chapters
+    print(f"[INFO] 从 {book_url} 发现 0 章 (无匹配规则)")
+    return []
 
 
 def fetch_chapter_content(chapter_url: str) -> str:

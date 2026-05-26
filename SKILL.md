@@ -185,24 +185,55 @@ delegate_task(
 
 ---
 
-## Python 工具箱（v0.2.0）
+## Python 工具箱（v0.3.0）
 
 > 参考调研：`references/research-existing-tools.md`（5 项目）+ `references/research-v2-enhancement.md`（15 项目）  
 > v2 设计文档：项目目录下 `docs/superpowers/specs/2026-05-26-novel-tools-v2-design.md`  
-> v2 实现计划：项目目录下 `docs/plans/2026-05-26-novel-tools-v2-plan.md`
+> v2 实现计划：项目目录下 `docs/plans/2026-05-26-novel-tools-v2-plan.md`  
+> pipeline 设计：项目目录下 `docs/superpowers/specs/2026-05-26-novel-auto-pipeline-design.md`  
+> pipeline 实现计划：项目目录下 `docs/plans/2026-05-26-novel-auto-pipeline-plan.md`  
+> 抓取技术参考：`references/biquge-scraping.md`
+> GitHub 爬虫项目调研：`references/github-scraper-research.md`
 
-v0.1.0 已有 5 个模块的完整实现，v0.2.0 进行渐进增强 + 新增 1 个模块：
+v0.1.0 已有 5 个模块的完整实现。v0.2.0 渐进增强 + 新增 style_lint。v0.3.0 新增 pipeline 流水线子系统。
 
-| 模块 | 对应 Agent | 功能（v0.1.0） | v0.2.0 增强 |
-|------|-----------|------|-------------|
-| stats | architect + narrator | 字数/进度/对话描写比例/节奏密度/情绪曲线 | 中文可读性(flesch_zh)、MTLD/HD-D词汇多样性、show_vs_tell比率、全书可读性曲线 |
-| slop | polisher | AI味检测：TTR/句长变异/黑名单(332词条)/结构模式 | Token rank分布分析(GPT-2/Qwen，无GPU降级HC3)、中文弱化词/陈词规则扫描 |
-| bible | character + consistency | 角色/世界观/伏笔 SQLite CRUD，speech_style追踪 | 角色共现表、别名归一化(关云长→关羽)、角色关系图(NetworkX)、DB上下文管理器 |
-| consistency | consistency-checker | 正则扫描：人名一致性、时间线、硬规则违反 | 多模型情感曲线+六弧线分类、跨章时间线检测、拼音模糊匹配、情绪从stats迁移至此 |
-| outline | architect | 分层大纲校验：章纲 vs 正文覆盖度 | TextRank摘要 vs 大纲对比(BM25相似度) |
-| **style_lint** 🆕 | polisher | — | 中文写作规范检查器：冗余/陈词/模糊措辞/副词滥用/对话标签重复，proselint风格插件架构 |
+| 模块 | 对应 Agent | 功能 | 版本 |
+|------|-----------|------|------|
+| stats | architect + narrator | 字数/进度/对话描写比例/节奏密度/情绪曲线 | v0.2.0 增强 |
+| slop | polisher | AI味检测：TTR/句长变异/黑名单/Token rank | v0.2.0 增强 |
+| bible | character + consistency | 角色/世界观/伏笔 SQLite CRUD | v0.2.0 增强 |
+| consistency | consistency-checker | 多模型情感曲线/跨章时间线/拼音模糊匹配 | v0.2.0 增强 |
+| outline | architect | 分层大纲校验 + TextRank 摘要 vs 大纲对比 | v0.2.0 增强 |
+| style_lint | polisher | 中文写作规范检查器（冗余/陈词/模糊措辞/副词滥用/对话标签重复） | v0.2.0 新增 |
+| **pipeline** 🆕 | — | **6 阶段自动化闭环：抓取→分析→评论验证→调研→改进→审查** | v0.3.0 新增 |
+
+### pipeline 快速使用
+
+```bash
+# 全流程
+python -m novel_tools.pipeline.pipeline run --limit 3 --max-chapters 10
+
+# 单独阶段
+python -m novel_tools.pipeline.pipeline fetch --limit 5
+python -m novel_tools.pipeline.pipeline analyze --book-id 1
+python -m novel_tools.pipeline.pipeline validate --book-id 1
+python -m novel_tools.pipeline.pipeline review
+
+# Cron 定时任务（每周日凌晨 3 点）
+# 已在 Hermes 中配置 cron job: hermes cron list | grep novel
+```
+
+**pipeline 核心机制：**
+1. 从 www.bqglll.cc 抓取免费章节（使用 `?get=content` 参数绕过 Cloudflare）
+2. 运行全部 6 个分析模块生成指标 JSON，存入 `pipeline.db`
+3. 将读者评论与工具输出按维度对比，发现 false_negative / false_positive
+4. 对差距通过 `delegate_task` 委派 subagent 调研和改进
+5. 改进后运行导入检查回归验证
+
+**抓取注意事项：** 移动端 (`m.bqglll.cc`) 章节页被 Cloudflare JS Challenge 拦截，必须使用桌面版 (`www.bqglll.cc`) + URL 追加 `?get=content` 触发服务端渲染。章节列表在 `<div class="listmain"> > <dl> > <dd>` 结构中，`href` 后可能有空格。详见 `references/biquge-scraping.md`。
 
 依赖：jieba（必选），SnowNLP/pypinyin/NetworkX（可选）
+数据文件：`hanzi_strokes.json` 从 Unicode Unihan 生成 → `references/hanzi-stroke-generation.md`
 
 ---
 
