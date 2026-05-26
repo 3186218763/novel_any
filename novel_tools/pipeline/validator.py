@@ -225,23 +225,29 @@ def _tool_normal_metrics_for_dimension(
     }
 
 
-def _tool_is_bad_for_dimension(metrics: dict, dimension: str) -> tuple[bool, dict]:
+def _tool_is_bad_for_dimension(metrics: dict, dimension: str, chapter_chars: int = 0) -> tuple[bool, dict]:
     """Check if tool metrics indicate a problem for the given dimension.
 
     Returns (is_bad, detail_dict).
     """
     # 复合检测：pacing 同时检查 action_density + narration_ratio（水文检测）
     if dimension == "pacing":
-        from novel_tools.pipeline.validator import _TOOL_THRESHOLDS
         detail = _tool_normal_metrics_for_dimension(metrics, "pacing")
         is_bad = detail["is_bad"]
-        # 补充：叙述比例过高也说明节奏慢（"水文"）
         narration = metrics.get("narration_ratio", 0)
         if not is_bad and narration > 0.75:
             is_bad = True
             detail["metric_name"] += "+narration_ratio"
             detail["metric_value"] = f"{detail['metric_value']}|narration={narration:.1%}"
         return is_bad, detail
+
+    # 自适应阈值：短文本降低 redundancy 检测门槛
+    if dimension == "redundancy":
+        threshold = 1 if chapter_chars < 2000 else 5
+        detail = _tool_normal_metrics_for_dimension(metrics, "redundancy")
+        detail["threshold"] = threshold
+        detail["is_bad"] = detail["metric_value"] is not None and detail["metric_value"] > threshold
+        return detail["is_bad"], detail
 
     detail = _tool_normal_metrics_for_dimension(metrics, dimension)
     return detail["is_bad"], detail
@@ -328,6 +334,9 @@ def validate_book(
             module_metrics[module] = metrics
 
         # ── Compare each review-dimension against this chapter ──────
+        stats_metrics = module_metrics.get("stats", {})
+        chapter_chars = stats_metrics.get("chinese_chars", 0)
+
         for review, dims in review_dims:
             review_id = review["id"]
 
@@ -335,7 +344,7 @@ def validate_book(
                 tool_module = DIMENSION_MODULE.get(dimension, "stats")
                 metrics = module_metrics.get(tool_module, {})
 
-                is_bad, detail = _tool_is_bad_for_dimension(metrics, dimension)
+                is_bad, detail = _tool_is_bad_for_dimension(metrics, dimension, chapter_chars=chapter_chars)
 
                 # Determine verdict
                 if review_sentiment == "negative" and not is_bad:

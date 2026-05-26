@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 from novel_tools import __version__ as TOOL_VERSION
-from novel_tools.pipeline.db import get_chapters, save_analysis, touch_book
+from novel_tools.pipeline.db import get_chapters, save_analysis, touch_book, get_analyses_for_chapter
 
 from novel_tools.stats import wordcount
 from novel_tools.stats import pacing as pacing_mod
@@ -124,6 +124,22 @@ def analyze_book(book_id: int) -> str:
         chapter_texts = [_read_file(ch["file_path"]) for ch in chapters]
         template_result = detect_template_patterns(chapter_texts)
         save_analysis(run_id, book_id, 0, "cross_chapter", template_result, TOOL_VERSION)
+
+    # ── 全书 style_lint 汇总 ──────────────────────────
+    from collections import Counter
+    import json as _json
+    all_issues = []
+    for ch in chapters:
+        for a in get_analyses_for_chapter(ch["id"]):
+            if a["module"] == "style_lint":
+                m = _json.loads(a["metrics"]) if isinstance(a["metrics"], str) else a["metrics"]
+                all_issues.extend(m.get("issues", []))
+    if all_issues:
+        save_analysis(run_id, book_id, 0, "style_lint_book", {
+            "total_issues": len(all_issues),
+            "issues_by_severity": dict(Counter(i.get("severity", "info") for i in all_issues)),
+            "unique_checks": len(set(i.get("check", "") for i in all_issues)),
+        }, TOOL_VERSION)
 
     touch_book(book_id)
     return run_id
