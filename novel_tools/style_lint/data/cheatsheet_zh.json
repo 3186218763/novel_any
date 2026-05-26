@@ -1,0 +1,250 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "description": "中文写作禁忌词典"
+  },
+  "redundancy": [
+    {
+      "pattern": "彻底完全",
+      "severity": "ban",
+      "suggestion": "删除其中一个"
+    },
+    {
+      "pattern": "绝对一定",
+      "severity": "ban",
+      "suggestion": "删除其中一个"
+    },
+    {
+      "pattern": "亲自自己",
+      "severity": "warn",
+      "suggestion": "删除'自己'"
+    },
+    {
+      "pattern": "全部都",
+      "severity": "warn",
+      "suggestion": "删除'都'或'全部'"
+    },
+    {
+      "pattern": "各种各样的",
+      "severity": "warn",
+      "suggestion": "用具体描述替代"
+    },
+    {
+      "pattern": "非常十分",
+      "severity": "ban",
+      "suggestion": "删除其中一个"
+    }
+  ],
+  "cliche": [
+    {
+      "pattern": "心中一动",
+      "severity": "ban"
+    },
+    {
+      "pattern": "心中暗道",
+      "severity": "ban"
+    },
+    {
+      "pattern": "眼中闪过一丝",
+      "severity": "ban"
+    },
+    {
+      "pattern": "嘴角微微上扬",
+      "severity": "ban"
+    },
+    {
+      "pattern": "嘴角勾起一抹",
+      "severity": "ban"
+    },
+    {
+      "pattern": "深吸一口气",
+      "severity": "ban"
+    },
+    {
+      "pattern": "长舒一口气",
+      "severity": "warn"
+    },
+    {
+      "pattern": "目光如炬",
+      "severity": "ban"
+    },
+    {
+      "pattern": "目光深邃",
+      "severity": "ban"
+    },
+    {
+      "pattern": "目光灼灼",
+      "severity": "ban"
+    },
+    {
+      "pattern": "缓缓说道",
+      "severity": "ban"
+    },
+    {
+      "pattern": "淡淡说道",
+      "severity": "ban"
+    },
+    {
+      "pattern": "冷冷说道",
+      "severity": "ban"
+    },
+    {
+      "pattern": "微微一笑",
+      "severity": "ban"
+    },
+    {
+      "pattern": "淡淡一笑",
+      "severity": "warn"
+    },
+    {
+      "pattern": "心头一紧",
+      "severity": "ban"
+    },
+    {
+      "pattern": "心头一沉",
+      "severity": "ban"
+    },
+    {
+      "pattern": "一股暖流",
+      "severity": "ban"
+    },
+    {
+      "pattern": "一股寒意",
+      "severity": "ban"
+    }
+  ],
+  "weasel": [
+    {
+      "pattern": "某种程度上",
+      "severity": "warn"
+    },
+    {
+      "pattern": "某种意义上",
+      "severity": "warn"
+    },
+    {
+      "pattern": "相对而言",
+      "severity": "warn"
+    },
+    {
+      "pattern": "一般来说",
+      "severity": "info"
+    },
+    {
+      "pattern": "众所周知",
+      "severity": "warn"
+    },
+    {
+      "pattern": "不言而喻",
+      "severity": "warn"
+    },
+    {
+      "pattern": "值得注意的是",
+      "severity": "warn"
+    }
+  ],
+  "adverb_abuse": [
+    {
+      "pattern": "就",
+      "severity": "warn",
+      "max_per_1k": 8
+    },
+    {
+      "pattern": "都",
+      "severity": "warn",
+      "max_per_1k": 8
+    },
+    {
+      "pattern": "很",
+      "severity": "warn",
+      "max_per_1k": 6
+    },
+    {
+      "pattern": "非常",
+      "severity": "warn",
+      "max_per_1k": 4
+    },
+    {
+      "pattern": "一直",
+      "severity": "info",
+      "max_per_1k": 4
+    },
+    {
+      "pattern": "总是",
+      "severity": "info",
+      "max_per_1k": 4
+    },
+    {
+      "pattern": "已经",
+      "severity": "info",
+      "max_per_1k": 5
+    },
+    {
+      "pattern": "立刻",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "忽然",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "突然",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "渐渐",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "默默",
+      "severity": "info",
+      "max_per_1k": 3
+    }
+  ],
+  "dialogue_tags": [
+    {
+      "pattern": "说道",
+      "severity": "warn",
+      "max_per_1k": 5
+    },
+    {
+      "pattern": "问道",
+      "severity": "warn",
+      "max_per_1k": 4
+    },
+    {
+      "pattern": "喊道",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "笑道",
+      "severity": "warn",
+      "max_per_1k": 5
+    },
+    {
+      "pattern": "叹道",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "怒道",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "回道",
+      "severity": "info",
+      "max_per_1k": 3
+    },
+    {
+      "pattern": "答道",
+      "severity": "info",
+      "max_per_1k": 3
+    }
+  ]
+}

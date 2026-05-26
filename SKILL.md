@@ -185,21 +185,24 @@ delegate_task(
 
 ---
 
-## Python 工具箱（规划中）
+## Python 工具箱（v0.2.0）
 
-> 详见 `references/research-existing-tools.md` — 业界 5 个小说写作工具调研。
+> 参考调研：`references/research-existing-tools.md`（5 项目）+ `references/research-v2-enhancement.md`（15 项目）  
+> v2 设计文档：项目目录下 `docs/superpowers/specs/2026-05-26-novel-tools-v2-design.md`  
+> v2 实现计划：项目目录下 `docs/plans/2026-05-26-novel-tools-v2-plan.md`
 
-计划为每个 Agent 配备对应的 Python 计算模块，不依赖 LLM 做确定性统计：
+v0.1.0 已有 5 个模块的完整实现，v0.2.0 进行渐进增强 + 新增 1 个模块：
 
-| 模块 | 对应 Agent | 功能 |
-|------|-----------|------|
-| stats | architect + narrator | 字数/章节进度/对话描写比例/节奏密度 |
-| slop | polisher | AI 味检测：TTR/句长变异/黑名单(332词条)/结构模式 |
-| bible | character + consistency | 角色/世界观/伏笔 SQLite CRUD，含 speech_style 追踪 |
-| consistency | consistency-checker | 正则扫描：人名一致性、时间线、硬规则违反 |
-| outline | architect | 分层大纲校验：章纲 vs 正文覆盖度、checkpoint 完成率 |
+| 模块 | 对应 Agent | 功能（v0.1.0） | v0.2.0 增强 |
+|------|-----------|------|-------------|
+| stats | architect + narrator | 字数/进度/对话描写比例/节奏密度/情绪曲线 | 中文可读性(flesch_zh)、MTLD/HD-D词汇多样性、show_vs_tell比率、全书可读性曲线 |
+| slop | polisher | AI味检测：TTR/句长变异/黑名单(332词条)/结构模式 | Token rank分布分析(GPT-2/Qwen，无GPU降级HC3)、中文弱化词/陈词规则扫描 |
+| bible | character + consistency | 角色/世界观/伏笔 SQLite CRUD，speech_style追踪 | 角色共现表、别名归一化(关云长→关羽)、角色关系图(NetworkX)、DB上下文管理器 |
+| consistency | consistency-checker | 正则扫描：人名一致性、时间线、硬规则违反 | 多模型情感曲线+六弧线分类、跨章时间线检测、拼音模糊匹配、情绪从stats迁移至此 |
+| outline | architect | 分层大纲校验：章纲 vs 正文覆盖度 | TextRank摘要 vs 大纲对比(BM25相似度) |
+| **style_lint** 🆕 | polisher | — | 中文写作规范检查器：冗余/陈词/模糊措辞/副词滥用/对话标签重复，proselint风格插件架构 |
 
-参考项目：novel-writer-master（已克隆分析其 anti_slop/bible/consistency/outline 模块）。
+依赖：jieba（必选），SnowNLP/pypinyin/NetworkX（可选）
 
 ---
 

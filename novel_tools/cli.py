@@ -15,7 +15,11 @@ def cmd_stats(args):
     elif args.stats_cmd == "pacing":
         result = pacing.analyze_pacing(args.path)
     elif args.stats_cmd == "rhythm":
-        result = rhythm.extract_emotion_curve(args.path)
+        from novel_tools.consistency.emotion import extract_emotion_curve
+        result = extract_emotion_curve(args.path)
+    elif args.stats_cmd == "readout":
+        from novel_tools.stats.wordcount import readout_book
+        result = readout_book(args.dir)
     else:
         result = {"error": f"Unknown stats command: {args.stats_cmd}"}
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -75,6 +79,8 @@ def cmd_bible(args):
             result = foreshadow.warn_expiring(project_dir, threshold)
         else:
             result = {"error": f"Unknown foreshadow action: {args.fs_action}"}
+    elif args.bible_cmd == "relation":
+        result = character.build_relation_graph(project_dir)
     elif args.bible_cmd == "world":
         if args.world_action == "list":
             result = world.list_rules(project_dir, args.category)
@@ -115,9 +121,21 @@ def cmd_outline(args):
     if args.outline_cmd == "parse":
         result = parser.parse_outline_md(args.path)
     elif args.outline_cmd == "diff":
-        result = diff.check_chapter_vs_outline(args.chapter, args.outline)
+        if getattr(args, 'mode', 'keyword') == "summary":
+            result = diff.summarize_vs_outline(args.chapter, args.outline)
+        else:
+            result = diff.check_chapter_vs_outline(args.chapter, args.outline)
     else:
         result = {"error": f"Unknown outline command: {args.outline_cmd}"}
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def cmd_style_lint(args):
+    from novel_tools.style_lint.rules import lint
+    with open(args.path, encoding="utf-8") as f:
+        text = f.read()
+    checks = args.check.split(",") if args.check else None
+    result = lint(text, checks=checks, severity=args.severity)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -135,6 +153,8 @@ def main():
     p_stats_pacing.add_argument("path", help="章节文件路径")
     p_stats_rhythm = stats_sub.add_parser("rhythm", help="情绪曲线")
     p_stats_rhythm.add_argument("path", help="章节文件路径")
+    p_stats_readout = stats_sub.add_parser("readout", help="全书可读性曲线")
+    p_stats_readout.add_argument("--dir", default=".", help="项目目录")
 
     # slop
     p_slop = sub.add_parser("slop", help="降AI率引擎")
@@ -193,6 +213,11 @@ def main():
     p_world_add.add_argument("--ch", type=int)
     p_world_add.add_argument("--project-dir", default=".")
 
+    p_rel = bible_sub.add_parser("relation", help="角色关系图")
+    rel_sub = p_rel.add_subparsers(dest="rel_action")
+    p_rel_graph = rel_sub.add_parser("graph")
+    p_rel_graph.add_argument("--project-dir", default=".")
+
     # consistency
     p_cons = sub.add_parser("consistency", help="一致性检查")
     cons_sub = p_cons.add_subparsers(dest="consistency_cmd")
@@ -211,6 +236,17 @@ def main():
     p_out_diff = outline_sub.add_parser("diff", help="正文vs章纲差异")
     p_out_diff.add_argument("chapter")
     p_out_diff.add_argument("outline")
+    p_out_diff.add_argument("--mode", choices=["keyword", "summary"], default="keyword")
+
+    # style-lint
+    p_style = sub.add_parser("style-lint", help="中文写作风格检查")
+    sl_sub = p_style.add_subparsers(dest="sl_cmd")
+    p_sl_scan = sl_sub.add_parser("scan", help="扫描文件")
+    p_sl_scan.add_argument("path", help="章节文件路径")
+    p_sl_scan.add_argument("--severity", default="warn",
+                            choices=["ban", "warn", "info"],
+                            help="最低报告级别")
+    p_sl_scan.add_argument("--check", help="逗号分隔的检查 (cliche,weasel,redundancy,adverb_abuse,dialogue_tags)")
 
     args = parser.parse_args()
 
@@ -224,6 +260,8 @@ def main():
         cmd_consistency(args)
     elif args.command == "outline":
         cmd_outline(args)
+    elif args.command == "style-lint":
+        cmd_style_lint(args)
     else:
         parser.print_help()
         sys.exit(1)

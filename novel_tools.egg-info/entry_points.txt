@@ -1,0 +1,2 @@
+[console_scripts]
+novel-tools = novel_tools.cli:main

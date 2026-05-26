@@ -96,3 +96,65 @@ def check_chapter_vs_outline(chapter_path: str, outline_path: str) -> dict:
         "extra_events": extra_events[:10],  # 最多 10 个
         "match_percentage": match_pct,
     }
+
+
+def summarize_vs_outline(chapter_path: str, outline_path: str) -> dict:
+    """用 TextRank 摘要对比章纲覆盖度."""
+    from pathlib import Path
+    from novel_tools.outline.parser import parse_outline_md
+
+    ch_path = Path(chapter_path)
+    ol_path = Path(outline_path)
+    if not ch_path.exists():
+        return {"error": f"Chapter not found: {chapter_path}"}
+    if not ol_path.exists():
+        return {"error": f"Outline not found: {outline_path}"}
+
+    with open(ch_path, encoding="utf-8") as f:
+        chapter_text = f.read()
+
+    outline_data = parse_outline_md(outline_path)
+    checkpoints = outline_data.get("checkpoints", [])
+
+    summary = _textrank_summary(chapter_text, topn=5)
+
+    covered = []
+    missing = []
+    for cp in checkpoints:
+        best_score = max((_bm25_similarity(cp, s) for s in summary), default=0)
+        if best_score > 0.15:
+            covered.append({"checkpoint": cp, "score": round(best_score, 3)})
+        else:
+            missing.append({"checkpoint": cp, "score": round(best_score, 3)})
+
+    coverage_pct = round(len(covered) / len(checkpoints) * 100, 1) if checkpoints else 0
+
+    return {
+        "chapter_file": str(ch_path),
+        "outline_file": str(ol_path),
+        "summary": summary,
+        "covered": covered,
+        "missing": missing,
+        "coverage_pct": coverage_pct,
+    }
+
+
+def _textrank_summary(text: str, topn: int = 5) -> list[str]:
+    """TextRank 摘要提取."""
+    try:
+        from snownlp import SnowNLP
+        s = SnowNLP(text)
+        return s.summary(topn)
+    except ImportError:
+        sentences = [s.strip() for s in re.split(r'[。！？]', text) if len(s.strip()) > 10]
+        return sentences[:topn]
+
+
+def _bm25_similarity(s1: str, s2: str, k1: float = 1.5, b: float = 0.75) -> float:
+    """简化 BM25 相似度."""
+    words1 = set(re.findall(r'[\u4e00-\u9fff]{2,}', s1))
+    words2 = set(re.findall(r'[\u4e00-\u9fff]{2,}', s2))
+    if not words1 or not words2:
+        return 0.0
+    overlap = words1 & words2
+    return len(overlap) / max(len(words1), len(words2))

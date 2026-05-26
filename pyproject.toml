@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "novel-tools"
+version = "0.2.0"
+description = "Python 工具箱 for novel_any — 小说文本分析"
+requires-python = ">=3.10"
+dependencies = ["jieba>=0.42"]
+license = {text = "MIT"}
+authors = [{name = "novel_any"}]
+
+[project.optional-dependencies]
+nlp = ["snownlp>=0.12", "pypinyin>=0.49"]
+graph = ["networkx>=3.0"]
+all = ["novel-tools[nlp,graph]"]
+
+[project.scripts]
+novel-tools = "novel_tools.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["novel_tools*"]

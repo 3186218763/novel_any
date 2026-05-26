@@ -102,8 +102,25 @@ def check_timeline(project_dir: str) -> dict:
         results.append(check_chapter_timeline(f))
 
     total_issues = sum(len(r.get("issues", [])) for r in results)
+    # Cross-chapter timeline detection
+    cross_issues = []
+    prev_tags = []
+    for r in results:
+        tags = [t["tag"] for t in r.get("timestamps", [])]
+        if prev_tags and tags:
+            if any(t in ("days_later", "months_later", "years_later", "time_skip_long")
+                   for t in prev_tags[-3:])                and any(t in ("same_day", "next_day", "early_morning")
+                       for t in tags[:3]):
+                cross_issues.append({
+                    "type": "cross_chapter_anomaly",
+                    "file": r["file"],
+                    "detail": "前章有长时间跳跃，但本章开头时间标记较早，可能矛盾"
+                })
+        prev_tags = tags
+
     return {
         "total_chapters": len(results),
         "total_issues": total_issues,
+        "cross_chapter_issues": cross_issues,
         "results": results,
     }

@@ -49,6 +49,19 @@ def analyze_pacing(filepath: str) -> dict:
     # 场景切换（分割线 --- 或 ***）
     scene_changes = len(re.findall(r'^[-*]{3,}\s*$', text, re.MULTILINE))
 
+    # === Show vs Tell 比率 ===
+    show_vs_tell = round(dialogue_chars / chinese_chars, 3) if chinese_chars > 0 else 0
+
+    # === 动作密度（常见动作动词频次/千字） ===
+    ACTION_VERBS = [
+        "走", "跑", "跳", "飞", "冲", "退", "进", "出", "站", "坐",
+        "躺", "跪", "爬", "翻", "转", "挥", "打", "踢", "推", "拉",
+        "抓", "握", "抱", "扔", "砸", "砍", "刺", "射", "拔", "抽",
+        "拍", "敲", "点", "按", "捏", "撕", "扯", "咬", "吞", "咽",
+    ]
+    action_hits = sum(text.count(v) for v in ACTION_VERBS)
+    action_density = round(action_hits / (chinese_chars / 1000), 1)
+
     return {
         "file_path": str(path),
         "chinese_chars": chinese_chars,
@@ -59,4 +72,6 @@ def analyze_pacing(filepath: str) -> dict:
         "avg_paragraph_len": round(sum(para_lens) / len(para_lens), 1) if para_lens else 0,
         "paragraph_density": round(len(paragraphs) / (chinese_chars / 1000), 1),  # 每千字段落数
         "scene_changes": scene_changes,
+        "show_vs_tell_ratio": show_vs_tell,
+        "action_density": action_density,
     }

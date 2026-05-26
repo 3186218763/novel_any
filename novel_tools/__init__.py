@@ -3,4 +3,4 @@
 Python 做计算，Agent 做判断。
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

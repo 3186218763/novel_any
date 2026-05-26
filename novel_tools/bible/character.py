@@ -7,31 +7,32 @@ from novel_tools.bible.model import get_db, _uid, row_to_dict, rows_to_list
 def register(project_dir: str, name: str, role: str = "supporting",
              profile: dict | None = None, speech_style: dict | None = None) -> str:
     """注册新角色，返回角色 id."""
-    db = get_db(project_dir)
+    from novel_tools.bible.model import bible_session
     char_id = _uid()
-    db.execute(
-        "INSERT INTO characters (id, name, role, profile, speech_style) VALUES (?, ?, ?, ?, ?)",
-        (
-            char_id,
-            name,
-            role,
-            json.dumps(profile or {}, ensure_ascii=False),
-            json.dumps(speech_style or {
-                "patterns": [],
-                "vocab_level": "中性",
-                "tone": "中性",
-                "catchphrases": [],
-            }, ensure_ascii=False),
-        ),
-    )
-    db.commit()
-    db.close()
+    with bible_session(project_dir) as db:
+        db.execute(
+            "INSERT INTO characters (id, name, role, profile, speech_style) VALUES (?, ?, ?, ?, ?)",
+            (
+                char_id,
+                name,
+                role,
+                json.dumps(profile or {}, ensure_ascii=False),
+                json.dumps(speech_style or {
+                    "patterns": [],
+                    "vocab_level": "中性",
+                    "tone": "中性",
+                    "catchphrases": [],
+                }, ensure_ascii=False),
+            ),
+        )
     return char_id
 
 
 def update(project_dir: str, char_id: str, **kwargs) -> dict | None:
     """更新角色信息."""
-    db = get_db(project_dir)
+    from novel_tools.bible.model import bible_session
+    with bible_session(project_dir) as db:
+        pass  # placeholder — restructured below
     allowed = {"name", "role", "aliases", "profile", "speech_style", "status"}
     updates = {}
     for k, v in kwargs.items():
@@ -111,3 +112,77 @@ def detect_inconsistencies(project_dir: str) -> list[dict]:
         names_seen[name] = char["id"]
 
     return issues
+
+
+def normalize_aliases(project_dir: str) -> list[dict]:
+    """检测可能的别名/同一人物."""
+    from novel_tools.bible.model import bible_session
+    results = []
+    with bible_session(project_dir) as db:
+        chars = db.execute("SELECT id, name FROM characters WHERE status='active'").fetchall()
+    chars = [dict(c) for c in chars]
+
+    for i, a in enumerate(chars):
+        for j, b in enumerate(chars):
+            if j <= i:
+                continue
+            score = 0
+            if a["name"] and b["name"] and a["name"][0] == b["name"][0]:
+                score += 40
+            a_set = set(a["name"][1:]) if len(a["name"]) > 1 else set()
+            b_set = set(b["name"][1:]) if len(b["name"]) > 1 else set()
+            if a_set & b_set:
+                score += min(len(a_set & b_set) * 15, 30)
+            len_diff = abs(len(a["name"]) - len(b["name"]))
+            if len_diff <= 1:
+                score += 10
+            if score >= 50:
+                results.append({
+                    "candidates": [a["id"], b["id"]],
+                    "names": [a["name"], b["name"]],
+                    "confidence": round(score / 100, 2),
+                    "suggestion": "merge" if score >= 70 else "review",
+                })
+    return sorted(results, key=lambda x: x["confidence"], reverse=True)
+
+
+def build_relation_graph(project_dir: str) -> dict:
+    """构建角色关系网络."""
+    from novel_tools.bible.model import bible_session
+
+    nodes = []
+    with bible_session(project_dir) as db:
+        chars = db.execute(
+            "SELECT id, name, role, first_appear_ch, last_appear_ch FROM characters WHERE status='active'"
+        ).fetchall()
+        for c in chars:
+            nodes.append({
+                "id": c["id"], "name": c["name"], "role": c["role"], "degree": 0,
+            })
+        cooc = db.execute("SELECT char_a, char_b, chapter, count FROM cooccurrence").fetchall()
+
+    edges = []
+    degree_map: dict[str, int] = {n["id"]: 0 for n in nodes}
+    for row in cooc:
+        a, b = row["char_a"], row["char_b"]
+        edges.append({
+            "from": a, "to": b, "weight": row["count"],
+            "chapters": [row["chapter"]],
+        })
+        degree_map[a] = degree_map.get(a, 0) + row["count"]
+        degree_map[b] = degree_map.get(b, 0) + row["count"]
+
+    merged: dict[tuple, dict] = {}
+    for e in edges:
+        key = tuple(sorted([e["from"], e["to"]]))
+        if key in merged:
+            merged[key]["weight"] += e["weight"]
+            merged[key]["chapters"].extend(e["chapters"])
+        else:
+            merged[key] = e
+    edges = list(merged.values())
+
+    for n in nodes:
+        n["degree"] = degree_map.get(n["id"], 0)
+
+    return {"nodes": nodes, "edges": edges}

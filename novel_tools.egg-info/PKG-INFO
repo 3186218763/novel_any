@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: novel-tools
+Version: 0.2.0
+Summary: Python 工具箱 for novel_any — 小说文本分析
+Author: novel_any
+License: MIT
+Requires-Python: >=3.10
+Requires-Dist: jieba>=0.42
+Provides-Extra: nlp
+Requires-Dist: snownlp>=0.12; extra == "nlp"
+Requires-Dist: pypinyin>=0.49; extra == "nlp"
+Provides-Extra: graph
+Requires-Dist: networkx>=3.0; extra == "graph"
+Provides-Extra: all
+Requires-Dist: novel-tools[graph,nlp]; extra == "all"

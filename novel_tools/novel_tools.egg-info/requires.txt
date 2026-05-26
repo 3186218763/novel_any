@@ -1,0 +1,11 @@
+jieba>=0.42
+
+[all]
+novel-tools[graph,nlp]
+
+[graph]
+networkx>=3.0
+
+[nlp]
+snownlp>=0.12
+pypinyin>=0.49

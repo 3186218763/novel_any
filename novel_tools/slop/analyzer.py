@@ -187,3 +187,91 @@ def score_ai_risk(metrics: dict) -> dict:
         "breakdown": scores,
         "verdict": verdict,
     }
+
+
+def _linguistic_features(text: str) -> dict:
+    """HC3 风格的语言学特征提取（无需 LM，纯统计）."""
+    import re
+    sentences = [s.strip() for s in re.split(r'[。！？…]+', text) if s.strip()]
+    sent_lens = [len(re.findall(r'[\u4e00-\u9fff]', s)) for s in sentences]
+
+    if sent_lens:
+        avg_sl = sum(sent_lens) / len(sent_lens)
+        var_sl = sum((l - avg_sl) ** 2 for l in sent_lens) / len(sent_lens)
+        cv = (var_sl ** 0.5) / avg_sl if avg_sl > 0 else 0
+    else:
+        avg_sl = cv = 0
+
+    words = list(re.findall(r'[\u4e00-\u9fff]+', text))
+    ttr = len(set(words)) / len(words) if words else 0
+
+    pos_words = ["好", "美", "乐", "喜", "爱", "笑", "暖", "甜", "幸", "赞"]
+    neg_words = ["悲", "痛", "恨", "怒", "哭", "冷", "暗", "苦", "惨", "死"]
+    pos_count = sum(text.count(w) for w in pos_words)
+    neg_count = sum(text.count(w) for w in neg_words)
+    sentiment = round((pos_count - neg_count) / max(pos_count + neg_count, 1), 3)
+
+    chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', text)) or 1
+    punct = len(re.findall(r'[，。！？、；：""\'\']', text))
+    punct_density = round(punct / (chinese_chars / 100), 1)
+
+    stopwords = set("的了吗呢吧啊嗯哦嘛啦着呢"
+                    "这和那但也却就都还很"
+                    "在一个从到对为被把让给向以")
+    stop_count = sum(1 for ch in text if ch in stopwords)
+    stop_ratio = round(stop_count / chinese_chars, 3)
+
+    return {
+        "avg_sentence_len": round(avg_sl, 1),
+        "sentence_len_cv": round(cv, 3),
+        "ttr": round(ttr, 3),
+        "sentiment": sentiment,
+        "punct_density": punct_density,
+        "stopword_ratio": stop_ratio,
+    }
+
+
+def analyze_token_rank(text: str, model_path: str | None = None) -> dict:
+    """Token rank 分布分析。GPU 模式用中文 GPT-2；否则降级为语言学特征."""
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        import torch
+        model_name = model_path or "uer/gpt2-chinese-cluecorpussmall"
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForCausalLM.from_pretrained(model_name)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.to(device)
+
+        inputs = tokenizer(text[:1024], return_tensors="pt", truncation=True).to(device)
+        with torch.no_grad():
+            outputs = model(**inputs, labels=inputs["input_ids"])
+            logits = outputs.logits[0]
+
+        ranks = {"top10": 0, "top100": 0, "top1000": 0, "rest": 0}
+        total = 0
+        for i in range(1, len(logits)):
+            probs = torch.softmax(logits[i], dim=-1)
+            sorted_probs, _ = torch.sort(probs, descending=True)
+            actual_prob = probs[inputs["input_ids"][0][i]].item()
+            rank = (sorted_probs > actual_prob).sum().item() + 1
+            if rank <= 10: ranks["top10"] += 1
+            elif rank <= 100: ranks["top100"] += 1
+            elif rank <= 1000: ranks["top1000"] += 1
+            else: ranks["rest"] += 1
+            total += 1
+
+        if total > 0:
+            for k in ranks: ranks[k] = round(ranks[k] / total, 3)
+
+        return {
+            "mode": "token_rank",
+            "rank_distribution": ranks,
+            "suspicious_segments": [],
+        }
+    except (ImportError, OSError, RuntimeError) as e:
+        return {
+            "mode": "linguistic",
+            "rank_distribution": {"top10": 0, "top100": 0, "top1000": 0, "rest": 0},
+            "linguistic_features": _linguistic_features(text),
+            "note": f"Token rank unavailable ({type(e).__name__}), using linguistic features",
+        }

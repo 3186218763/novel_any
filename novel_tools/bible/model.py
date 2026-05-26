@@ -55,9 +55,19 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS cooccurrence (
+            char_a TEXT NOT NULL,
+            char_b TEXT NOT NULL,
+            chapter INT NOT NULL,
+            distance INT NOT NULL,
+            count INT DEFAULT 1,
+            PRIMARY KEY (char_a, char_b, chapter)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_characters_name ON characters(name);
         CREATE INDEX IF NOT EXISTS idx_foreshadows_status ON foreshadows(status);
         CREATE INDEX IF NOT EXISTS idx_world_rules_category ON world_rules(category);
+        CREATE INDEX IF NOT EXISTS idx_cooccurrence_chapter ON cooccurrence(chapter);
     ''')
     conn.commit()
 
@@ -75,3 +85,17 @@ def row_to_dict(row: sqlite3.Row | None) -> dict | None:
 
 def rows_to_list(rows: list[sqlite3.Row]) -> list[dict]:
     return [dict(r) for r in rows]
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def bible_session(project_dir: str = "."):
+    """上下文管理器：自动 commit + close 数据库连接."""
+    db = get_db(project_dir)
+    try:
+        yield db
+    finally:
+        db.commit()
+        db.close()

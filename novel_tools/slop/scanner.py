@@ -121,3 +121,64 @@ def scan_overused(text: str) -> dict:
         "words": results[:20],
         "suggestions": suggestions,
     }
+
+
+
+# 中文弱化词/陈词规则（借鉴 proselint write-good）
+_WEASEL_PATTERNS = {
+    "weasel": [
+        "众所周知", "不言而喻", "值得注意的是", "显而易见",
+        "毫无疑问", "毋庸置疑", "不可否认", "必须承认",
+        "总的来说", "综上所述", "总而言之",
+    ],
+    "hedge": [
+        "某种程度上", "某种意义上", "相对而言", "一般来说",
+        "在某种程度上", "在很大程度上", "大体上",
+        "似乎", "仿佛", "好像", "也许", "可能", "大概",
+    ],
+    "cliche_structure": [
+        r"令人[\u4e00-\u9fff]{1,3}",
+        r"让人[\u4e00-\u9fff]{1,3}",
+        r"使人[\u4e00-\u9fff]{1,3}",
+        r"[\u4e00-\u9fff]{1,2}地说",
+        r"[\u4e00-\u9fff]{1,2}地道",
+    ],
+}
+
+
+def scan_chinese_weasel(text: str) -> dict:
+    """扫描中文弱化词/陈词."""
+    results: dict[str, list[dict]] = {"weasel": [], "hedge": [], "cliche_structure": []}
+    total = 0
+
+    for category, patterns in _WEASEL_PATTERNS.items():
+        for pattern in patterns:
+            if any(pattern.startswith(p) for p in ["令", "让", "使"]) or \
+               any(pattern.endswith(p) for p in ["说", "道"]):
+                for m in re.finditer(pattern, text):
+                    results[category].append({
+                        "text": m.group(0),
+                        "position": m.start(),
+                    })
+                    total += 1
+            else:
+                count = text.count(pattern)
+                if count > 0:
+                    for _ in range(count):
+                        results[category].append({"text": pattern, "position": -1})
+                        total += 1
+
+    for cat in results:
+        seen = set()
+        deduped = []
+        for d in results[cat]:
+            key = (d["text"], d["position"])
+            if key not in seen:
+                seen.add(key)
+                deduped.append(d)
+        results[cat] = deduped
+
+    return {
+        "total_hits": total,
+        "by_category": results,
+    }

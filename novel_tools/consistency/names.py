@@ -17,7 +17,13 @@ def scan_name_variants(text: str, known_names: list[str]) -> dict:
     """
     # 提取所有可能的人名（使用中文人名常见模式：2-3 字，含姓）
     # 中文常见姓氏
-    SURNAMES = "王李张刘陈杨黄赵周吴徐孙马胡朱郭何罗高林"
+    SURNAMES = (
+        "王李张刘陈杨黄赵周吴徐孙马胡朱郭何罗高林"
+        "郑梁谢宋唐许韩冯邓曹彭曾萧田董潘袁于蒋蔡余杜叶程苏魏吕丁任沈"
+        "姚卢姜崔钟谭陆汪范金石廖贾夏韦傅方白邹孟熊秦邱江尹薛闫段雷侯"
+        "龙史陶黎贺顾毛郝龚邵万钱严覃武戴莫孔向汤温康施文牛樊葛邢安齐"
+        "易乔伍庞颜倪庄聂章鲁岳翟殷詹申欧耿关兰焦俞左柳甘祝包宁尚符"
+    )
     name_pattern = re.compile(rf'[{SURNAMES}][\u4e00-\u9fff]{{1,2}}(?![，。！？、：；""」』\)）\s])')
 
     found_names = name_pattern.findall(text)
@@ -107,3 +113,14 @@ def scan_all(project_dir: str) -> dict:
             results.append({"file": f, "error": str(e)})
 
     return {"total_files": len(results), "results": results}
+
+
+def _pinyin_similar(name1: str, name2: str) -> bool:
+    """检测两名字是否同音异字."""
+    try:
+        from pypinyin import pinyin, Style
+        py1 = ''.join([p[0] for p in pinyin(name1, style=Style.TONE3)])
+        py2 = ''.join([p[0] for p in pinyin(name2, style=Style.TONE3)])
+        return py1 == py2 and name1 != name2
+    except ImportError:
+        return False
