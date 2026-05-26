@@ -112,7 +112,13 @@ def extract_emotion_curve(filepath: str, segments: int = 40,
     if len(intensities) > 1:
         mean = sum(intensities) / len(intensities)
         variance = sum((v - mean) ** 2 for v in intensities) / len(intensities)
-        intensity_variance = round(variance ** 0.5, 4)
+        raw_variance = variance ** 0.5
+        # 短文本归一化: < 2000 字的文本窗口少，方差虚高，乘以惩罚系数
+        if total_chars < 2000:
+            penalty = max(0.3, total_chars / 2000)  # 0.3 ~ 1.0
+            intensity_variance = round(raw_variance * penalty, 4)
+        else:
+            intensity_variance = round(raw_variance, 4)
     else:
         intensity_variance = 0.0
     threshold = avg_intensity * 1.5 if avg_intensity > 0 else 0.5

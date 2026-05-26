@@ -67,7 +67,13 @@ def _run_module(module_name: str, file_path: str) -> dict:
 
         elif module_name == "style_lint":
             text = _read_file(file_path)
-            return rules.lint(text)
+            result = rules.lint(text)
+            # 短文本追加 quick_scan 结果
+            if len(text) < 2000:
+                qs = rules.quick_scan(text)
+                result["issues"].extend(qs["issues"])
+                result["summary"] = qs["summary"]  # quick_scan 汇总覆盖
+            return result
 
         else:
             return {"error": f"Unknown module: {module_name}"}

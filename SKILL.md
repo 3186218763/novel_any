@@ -5,7 +5,7 @@ description: |
   覆盖大纲构思→写作执行→精修审查全流程。6 个专业 Agent 协作，
   作者主导、AI 协力的协作模式。
   触发方式：「写小说」「帮我写书」「开新书」「继续写」「审稿」
-version: 1.0.0
+version: 1.1.0
 ---
 
 # novel_any — AI 人机协作小说写作系统
@@ -197,6 +197,7 @@ delegate_task(
 > GitHub 爬虫项目调研：`references/github-scraper-research.md`
 > Pipeline 使用：`references/pipeline-usage.md`
 > **验证报告**: 项目目录下 `docs/superpowers/specs/2026-05-26-novel-tools-validation-report.md`
+> **验证模式**: `references/tool-validation-pattern.md`
 
 v0.1.0 已有 5 个模块的完整实现。v0.2.0 渐进增强 + 新增 style_lint。v0.3.0 新增 pipeline 流水线子系统。
 
