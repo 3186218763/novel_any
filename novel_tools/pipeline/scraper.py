@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 from . import db
 
 BASE_URL = "https://m.bqglll.cc"
+WWW_URL = "https://www.bqglll.cc"
 
 # 数据目录 — db.py 的 PIPELINE_DIR 是 .../novel_any/data/pipeline
 PIPELINE_DIR = Path(__file__).parent.parent.parent / "data" / "pipeline"
@@ -22,15 +23,18 @@ BOOKS_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── 导航文本清理 ─────────────────────────────────────
 NAV_PATTERNS = [
-    re.compile(r"请记住本书首发域名.*?", re.DOTALL),
+    re.compile(r"请记住本书首发域名.*?，最快更新", re.DOTALL),
     re.compile(r"手机版阅读地址.*?", re.DOTALL),
-    re.compile(r"最快更新.*?", re.DOTALL),
-    re.compile(r"笔趣阁.*?最快更新.*?", re.DOTALL),
-    re.compile(r"m\.bqglll\.cc", re.DOTALL),
+    re.compile(r"最快更新.*?最新章节！", re.DOTALL),
+    re.compile(r"笔趣阁.*?最快更新.*?无广告！", re.DOTALL),
+    re.compile(r"m\\.bqglll\\.cc", re.DOTALL),
+    re.compile(r"www\\.bqglll\\.cc", re.DOTALL),
+    re.compile(r"一秒记住.*?：.*?。", re.DOTALL),
+    re.compile(r"天才一秒记住.*?。", re.DOTALL),
 ]
 
 # 章节内容优先搜索的容器 ID
-CONTENT_IDS = ["content", "chaptercontent", "txt", "article", "nr1"]
+CONTENT_IDS = ["chaptercontent", "content", "txt", "article", "nr1"]
 
 # ── 会话 ─────────────────────────────────────────────
 
@@ -147,41 +151,58 @@ def fetch_homepage_books(limit: int = 10) -> list[dict]:
 
 
 def fetch_book_chapters(book_url: str, max_chapters: int = 50) -> list[dict]:
-    """从书籍目录页获取章节列表.
+    """从书籍目录页获取章节列表（使用 www 版避免 Cloudflare 拦截）.
 
     Returns:
         [{"chapter_no": int, "title": str, "url": str}, ...]
     """
     session = _get_session()
-    html_text = _fetch(book_url, session)
+    # 将 m.bqglll.cc 转为 www.bqglll.cc（桌面版有完整章节列表）
+    www_url = book_url.replace("m.bqglll.cc", "www.bqglll.cc")
+    html_text = _fetch(www_url, session)
     if not html_text:
-        print(f"[ERROR] 无法访问书籍页面: {book_url}")
+        print(f"[ERROR] 无法访问书籍页面: {www_url}")
         return []
 
+    # www 版章节在 <div class="listmain"> > <dl> > <dd><a href ="/look/NNN/MMMM.html">标题</a></dd>
+    # href 后面有空格: href ="/look/..."
     chapter_pattern = re.compile(
-        r'<a\s+href="(/look/\d+/(\d+)\.html)"[^>]*>([^<]+)</a>',
+        r'<dd>\s*<a\s+href\s*=\s*"((?:/look/\d+/)?(\d+)\.html)"\s*>\s*([^<]+?)\s*</a>\s*</dd>',
         re.DOTALL,
     )
 
     chapters = []
+    seen = set()
     for match in chapter_pattern.finditer(html_text):
         path = match.group(1)
         chapter_no = int(match.group(2))
         title = match.group(3).strip()
-        url = BASE_URL + path
+        if chapter_no in seen:
+            continue
+        seen.add(chapter_no)
+        # 补全路径
+        if not path.startswith("/look/"):
+            # 提取 book id 从 www_url
+            book_id_match = re.search(r"/look/(\d+)/", www_url)
+            if book_id_match:
+                path = f"/look/{book_id_match.group(1)}/{path}"
+        url = WWW_URL + path
         chapters.append({"chapter_no": chapter_no, "title": title, "url": url})
-        if len(chapters) >= max_chapters:
-            break
 
     chapters.sort(key=lambda c: c["chapter_no"])
-    print(f"[INFO] 从 {book_url} 发现 {len(chapters)} 章")
+    chapters = chapters[:max_chapters]
+    print(f"[INFO] 从 {www_url} 发现 {len(chapters)} 章")
     return chapters
 
 
 def fetch_chapter_content(chapter_url: str) -> str:
-    """下载并清洗单章内容."""
+    """下载并清洗单章内容（使用 www 版 + ?get=content 参数绕过 Cloudflare）."""
     session = _get_session()
-    html_text = _fetch(chapter_url, session)
+    www_url = chapter_url.replace("m.bqglll.cc", "www.bqglll.cc")
+    # 添加 ?get=content 参数触发服务端渲染内容
+    if "?" not in www_url:
+        www_url += "?get=content"
+    html_text = _fetch(www_url, session)
     if not html_text:
         return ""
     return _clean_chapter_content(html_text)
